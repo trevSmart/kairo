@@ -24,6 +24,7 @@ type VisEdge = {
   color: { color: string; opacity: number };
   width: number;
   length: number;
+  baseLength: number;
   title?: string;
   weight: number;
   fidelity: number;
@@ -203,17 +204,18 @@ function buildVisData(
     else if (weight >= 7) color = '#9C27B0';
     else if (weight >= 5) color = '#2196F3';
     else if (weight >= 3) color = '#757575';
-    return {
-      id: i,
-      from: edge.from,
-      to: edge.to,
-      arrows: 'to',
-      color: { color, opacity },
-      width,
-      length: springLength,
-      weight,
-      fidelity,
-    };
+      return {
+        id: i,
+        from: edge.from,
+        to: edge.to,
+        arrows: 'to',
+        color: { color, opacity },
+        width,
+        length: springLength,
+        baseLength: springLength,
+        weight,
+        fidelity,
+      };
   });
   return { visNodes, visEdges };
 }
@@ -573,6 +575,27 @@ export class HtmlVisualizer {
     </div>
 
     <div class="control-section">
+      <label class="control-label">Edge Strength Encoding</label>
+      <div class="checkbox-group">
+        <label class="checkbox-item">
+          <input type="radio" name="edge-encoding" value="thicknessOpacity" checked onchange="setEdgeEncoding(this.value)"> Thickness + Opacity
+        </label>
+        <label class="checkbox-item">
+          <input type="radio" name="edge-encoding" value="thicknessOpacityLength" onchange="setEdgeEncoding(this.value)"> Thickness + Opacity + Length
+        </label>
+        <label class="checkbox-item">
+          <input type="radio" name="edge-encoding" value="saturation" onchange="setEdgeEncoding(this.value)"> Single Color (Saturation)
+        </label>
+        <label class="checkbox-item">
+          <input type="radio" name="edge-encoding" value="lightness" onchange="setEdgeEncoding(this.value)"> Single Color (Lightness)
+        </label>
+        <label class="checkbox-item">
+          <input type="radio" name="edge-encoding" value="dashWeak" onchange="setEdgeEncoding(this.value)"> Dash Weak + Thickness
+        </label>
+      </div>
+    </div>
+
+    <div class="control-section">
       <label class="control-label">Weak Relation Threshold</label>
       <input type="range" id="weak-threshold" min="1" max="10" value="5" step="0.5" onchange="updatePhysics()">
       <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
@@ -625,27 +648,8 @@ export class HtmlVisualizer {
       <span>LWC / Aura</span>
     </div>
     <hr style="margin: 12px 0; border: none; border-top: 1px solid #eee;">
-    <div class="legend-title">Dependency Weights</div>
-    <div class="legend-item">
-      <div style="width: 30px; height: 3px; background: #E91E63;"></div>
-      <span style="font-size: 12px;">Critical (9-10)</span>
-    </div>
-    <div class="legend-item">
-      <div style="width: 30px; height: 2.5px; background: #9C27B0;"></div>
-      <span style="font-size: 12px;">Business (7-8)</span>
-    </div>
-    <div class="legend-item">
-      <div style="width: 30px; height: 2px; background: #2196F3;"></div>
-      <span style="font-size: 12px;">Structure (5-6)</span>
-    </div>
-    <div class="legend-item">
-      <div style="width: 30px; height: 1px; background: #757575;"></div>
-      <span style="font-size: 12px;">Operations (3-4)</span>
-    </div>
-    <div class="legend-item">
-      <div style="width: 30px; height: 0.5px; background: #ccc;"></div>
-      <span style="font-size: 12px;">Infrastructure (1-2)</span>
-    </div>
+    <div class="legend-title">Edge Strength</div>
+    <div style="font-size: 12px; color: #666;">Encoded by selected mode in the controls.</div>
   </div>
 
   <script>
@@ -742,6 +746,7 @@ export class HtmlVisualizer {
         color: { color: color, opacity: opacity },
         width: width,
         length: springLength,
+        baseLength: springLength,
         weight: weight,
         fidelity: fidelity, // For updatePhysics
       };
@@ -775,12 +780,9 @@ export class HtmlVisualizer {
         timestep: 0.5,
         adaptiveTimestep: true,
       },
-      rendering: {
-        // Enable hardware acceleration and performance optimizations
+      // Note: vis-network v9 does not support "rendering" options.
+      layout: {
         improvedLayout: true,
-        hideEdgesOnDrag: false, // Keep visible but could hide for better performance
-        hideEdgesOnZoom: false,
-        hideNodesOnDrag: false,
       },
       interaction: {
         hover: true,
@@ -813,13 +815,7 @@ export class HtmlVisualizer {
           },
         },
       },
-      performance: {
-        // Optimize for better framerate
-        forceHidden: false,
-        hiding: {
-          enabled: false, // Don't hide distant nodes during zoom
-        },
-      },
+      // Note: vis-network v9 does not support "performance" options.
     };
 
     const network = new vis.Network(container, data, options);

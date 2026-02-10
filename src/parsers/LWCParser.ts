@@ -15,7 +15,7 @@ export class LWCParser {
    * Parse LWC .js file and return dependencies to Apex classes (and optionally CustomObjects).
    * componentId must be the full id e.g. LightningWebComponent:myComponent
    */
-  parse(filePath: string, componentId: string): Dependency[] {
+  parse(filePath: string, componentId: string, isApexClass?: (name: string) => boolean): Dependency[] {
     const dependencies: Dependency[] = [];
     const seenApex = new Set<string>();
 
@@ -25,7 +25,7 @@ export class LWCParser {
       LWCParser.APEX_IMPORT.lastIndex = 0;
       while ((match = LWCParser.APEX_IMPORT.exec(content)) !== null) {
         const apexClassName = match[1];
-        if (!seenApex.has(apexClassName)) {
+        if (!seenApex.has(apexClassName) && (!isApexClass || isApexClass(apexClassName))) {
           seenApex.add(apexClassName);
           const dep: Dependency = {
             from: componentId,

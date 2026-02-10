@@ -15,6 +15,7 @@ export class MetadataAnalyzer {
   private auraParser = new AuraParser();
   private objectNameMap = new Map<string, string>();
   private standardObjects = new Set(['Account', 'Contact', 'Opportunity', 'Case', 'Lead']);
+  private apexClassSet = new Set<string>();
 
   private isTestClass(filePath: string): boolean {
     try {
@@ -49,6 +50,16 @@ export class MetadataAnalyzer {
       if (this.objectNameMap.has(name.toLowerCase())) return true;
       return /__(c|mdt|x|kav)$/i.test(name);
     };
+    const isApexClass = (name: string): boolean => this.apexClassSet.has(name);
+
+    // Pre-index Apex classes by filename (case-sensitive)
+    for (const file of files) {
+      if (file.type === 'ApexClass') {
+        const fileName = file.path.split('/').pop()!;
+        const name = fileName.replace(/\.cls$/, '');
+        this.apexClassSet.add(name);
+      }
+    }
 
     for (const file of files) {
       try {
@@ -59,11 +70,17 @@ export class MetadataAnalyzer {
           dependencies.forEach(dep => graphBuilder.addDependency(dep));
         } else if (file.type === 'ApexClass') {
           if (this.isTestClass(file.path)) continue;
-          const { component, dependencies } = this.apexParser.parse(file.path, 'ApexClass', resolveObjectName, isObjectName);
+          const { component, dependencies } = this.apexParser.parse(
+            file.path,
+            'ApexClass',
+            resolveObjectName,
+            isObjectName,
+            isApexClass
+          );
           graphBuilder.addComponent(component);
           dependencies.forEach(dep => graphBuilder.addDependency(dep));
         } else if (file.type === 'ApexTrigger') {
-          const { component, dependencies } = this.apexParser.parse(file.path, 'ApexTrigger', resolveObjectName, isObjectName);
+          const { component, dependencies } = this.apexParser.parse(file.path, 'ApexTrigger', resolveObjectName, isObjectName, isApexClass);
           graphBuilder.addComponent(component);
           dependencies.forEach(dep => graphBuilder.addDependency(dep));
         } else if (file.type === 'LWC') {
@@ -76,7 +93,7 @@ export class MetadataAnalyzer {
             type: 'LightningWebComponent',
             filePath: file.path,
           });
-          const lwcDeps = this.lwcParser.parse(file.path, componentId);
+          const lwcDeps = this.lwcParser.parse(file.path, componentId, isApexClass);
           lwcDeps.forEach(dep => graphBuilder.addDependency(dep));
         } else if (file.type === 'Aura') {
           const fileName = file.path.split('/').pop()!;
@@ -88,7 +105,7 @@ export class MetadataAnalyzer {
             type: 'AuraComponent',
             filePath: file.path,
           });
-          const auraDeps = this.auraParser.parse(file.path, componentId);
+          const auraDeps = this.auraParser.parse(file.path, componentId, isApexClass);
           auraDeps.forEach(dep => graphBuilder.addDependency(dep));
         }
 

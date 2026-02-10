@@ -12,7 +12,8 @@ export class ApexParser {
     filePath: string,
     type: 'ApexClass' | 'ApexTrigger',
     objectNameResolver?: (name: string) => string,
-    isObjectName?: (name: string) => boolean
+    isObjectName?: (name: string) => boolean,
+    isApexClass?: (name: string) => boolean
   ): ParsedApex {
     const content = readFileSync(filePath, 'utf-8');
 
@@ -73,10 +74,17 @@ export class ApexParser {
     // - (?<!\.) = not after dot (excludes record.Field__c)
     // - (?=>|\s*\(|\s+[a-z]) = only when followed by ">" (generic), "(" (constructor), or " varName" (type in declaration)
     //   so we exclude "CSP_Date4__c FROM" and "Id,CSP_Date4__c," (SELECT list fields)
-    const typePattern = /(?<!\.)\b([A-Z][a-zA-Z0-9_]*__(?:c|mdt))\b(?=>|\s*\(|\s+[a-z])/g;
+    const typePattern = /(?<!\.)\b([A-Z][a-zA-Z0-9_]*__(?:c|mdt))\b(?=>|[ \t]*\(|[ \t]+[a-z])/g;
+    const soqlKeywords = new Set(['from', 'where', 'order', 'group', 'limit', 'offset', 'having']);
     const foundTypeReferences = new Set<string>();
     while ((match = typePattern.exec(content)) !== null) {
       const objectName = objectNameResolver ? objectNameResolver(match[1]) : match[1];
+      const after = content.slice(match.index + match[0].length);
+      const afterClean = after.replace(/^[\s,]+/, '');
+      const nextWordMatch = afterClean.match(/^([A-Za-z]+)/);
+      if (nextWordMatch && soqlKeywords.has(nextWordMatch[1].toLowerCase())) {
+        continue; // Skip SOQL SELECT list fields like "Field__c from"
+      }
       // Skip if already tracked via SOQL/DML
       if (!objectOperations.has(objectName) && !foundTypeReferences.has(objectName)) {
         foundTypeReferences.add(objectName);
@@ -116,7 +124,7 @@ export class ApexParser {
           };
           dep.weight = DependencyWeightCalculator.calculate(dep);
           dependencies.push(dep);
-        } else {
+        } else if (!isApexClass || isApexClass(className)) {
           const dep: Dependency = {
             from: component.id,
             to: `ApexClass:${className}`,
