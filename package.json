@@ -36,11 +36,11 @@
     "prettier": "^3.5.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "commander": "^12.1.0",
-    "fast-xml-parser": "^4.5.0",
+    "fast-xml-parser": "^5.3.4",
     "graphology": "^0.25.4",
     "graphology-types": "^0.24.7"
   }
