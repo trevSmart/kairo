@@ -26,6 +26,7 @@ type VisEdge = {
   length: number;
   baseLength: number;
   title?: string;
+  dashes?: boolean | number[];
   weight: number;
   fidelity: number;
 };
@@ -360,6 +361,15 @@ export class HtmlVisualizer {
       transform: translateZ(0);
       will-change: transform;
     }
+    #heatmap {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0.7;
+      mix-blend-mode: multiply;
+    }
     #graph canvas {
       /* Optimize canvas rendering */
       image-rendering: -webkit-optimize-contrast;
@@ -523,7 +533,9 @@ export class HtmlVisualizer {
     </div>
   </div>
 
-  <div id="graph"></div>
+  <div id="graph">
+    <canvas id="heatmap"></canvas>
+  </div>
 
   <div id="controls">
     <div class="control-section">
@@ -820,6 +832,92 @@ export class HtmlVisualizer {
 
     const network = new vis.Network(container, data, options);
 
+    // Heatmap background (density of nodes) - cheap grid-based rendering
+    const heatmapCanvas = document.getElementById('heatmap');
+    const heatmapCtx = heatmapCanvas.getContext('2d');
+    let heatmapNodes = nodesDataset.get();
+    let heatmapMaxSize = Math.max(1, ...heatmapNodes.map(n => n.size || 1));
+    let heatmapScheduled = false;
+    let heatmapLastDraw = 0;
+
+    function refreshHeatmapCache() {
+      heatmapNodes = nodesDataset.get();
+      heatmapMaxSize = Math.max(1, ...heatmapNodes.map(n => n.size || 1));
+      scheduleHeatmap(true);
+    }
+
+    function resizeHeatmapCanvas() {
+      const rect = container.getBoundingClientRect();
+      heatmapCanvas.width = Math.max(1, Math.floor(rect.width));
+      heatmapCanvas.height = Math.max(1, Math.floor(rect.height));
+    }
+
+    function scheduleHeatmap(force = false) {
+      const now = performance.now();
+      if (!force && now - heatmapLastDraw < 200) return;
+      if (heatmapScheduled) return;
+      heatmapScheduled = true;
+      requestAnimationFrame(() => {
+        heatmapScheduled = false;
+        drawHeatmap();
+      });
+    }
+
+    function drawHeatmap() {
+      if (!heatmapCtx) return;
+      resizeHeatmapCanvas();
+
+      const width = heatmapCanvas.width;
+      const height = heatmapCanvas.height;
+      const gridSize = 60; // 60x60 grid for performance
+      const cellW = width / gridSize;
+      const cellH = height / gridSize;
+      const grid = new Float32Array(gridSize * gridSize);
+
+      const positions = network.getPositions(heatmapNodes.map(n => n.id));
+      for (const node of heatmapNodes) {
+        const pos = positions[node.id];
+        if (!pos) continue;
+        const dom = network.canvasToDOM(pos);
+        const size = node.size || 10;
+        const intensity = Math.min(3, 0.5 + size / heatmapMaxSize);
+        const gx = Math.max(0, Math.min(gridSize - 1, Math.floor(dom.x / cellW)));
+        const gy = Math.max(0, Math.min(gridSize - 1, Math.floor(dom.y / cellH)));
+        const idx = gy * gridSize + gx;
+        grid[idx] += intensity;
+        // Light smoothing to neighbors (cheap)
+        if (gx + 1 < gridSize) grid[idx + 1] += intensity * 0.4;
+        if (gy + 1 < gridSize) grid[idx + gridSize] += intensity * 0.4;
+        if (gx > 0) grid[idx - 1] += intensity * 0.4;
+        if (gy > 0) grid[idx - gridSize] += intensity * 0.4;
+      }
+
+      let max = 0;
+      for (let i = 0; i < grid.length; i++) {
+        if (grid[i] > max) max = grid[i];
+      }
+      max = Math.max(1, max);
+
+      heatmapCtx.clearRect(0, 0, width, height);
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          const value = grid[y * gridSize + x];
+          if (value <= 0) continue;
+          const alpha = Math.min(0.6, value / max);
+          heatmapCtx.fillStyle = 'rgba(255, 120, 80, ' + alpha.toFixed(3) + ')';
+          heatmapCtx.fillRect(x * cellW, y * cellH, cellW + 0.5, cellH + 0.5);
+        }
+      }
+
+      heatmapLastDraw = performance.now();
+    }
+
+    window.addEventListener('resize', () => scheduleHeatmap(true));
+    network.on('dragEnd', () => scheduleHeatmap());
+    network.on('zoom', () => scheduleHeatmap());
+    network.on('afterDrawing', () => scheduleHeatmap());
+    scheduleHeatmap(true);
+
     // Show labels only at high zoom levels to avoid clutter
     const LABEL_ZOOM_THRESHOLD = 2.0;
     let labelsVisible = false;
@@ -932,12 +1030,12 @@ export class HtmlVisualizer {
           length = baseLength * (1.4 - 0.8 * n);
         } else if (mode === 'saturation') {
           const sat = 20 + Math.round(80 * n);
-          color = `hsl(215, ${sat}%, 50%)`;
+          color = 'hsl(215, ' + sat + '%, 50%)';
           opacity = 0.9;
           width = 1 + 2 * n;
         } else if (mode === 'lightness') {
           const light = 80 - Math.round(40 * n);
-          color = `hsl(215, 70%, ${light}%)`;
+          color = 'hsl(215, 70%, ' + light + '%)';
           opacity = 0.9;
           width = 1 + 2 * n;
         } else if (mode === 'dashWeak') {
@@ -997,6 +1095,7 @@ export class HtmlVisualizer {
       edgesDataset.clear();
       nodesDataset.add(nodesWithPositions);
       edgesDataset.add(encodeEdges(filteredEdges, currentEdgeMode));
+      refreshHeatmapCache();
       updateLabelsForZoom(network.getScale());
     }
 
@@ -1125,6 +1224,7 @@ export class HtmlVisualizer {
       // Update edges in dataset
       edgesDataset.clear();
       edgesDataset.add(encodeEdges(updatedEdges, currentEdgeMode));
+      refreshHeatmapCache();
 
       // Re-enable physics temporarily to apply changes
       network.setOptions({ physics: { enabled: true } });
@@ -1200,6 +1300,15 @@ export class HtmlVisualizer {
     .stat { display: flex; align-items: center; gap: 8px; }
     .stat-value { font-size: 20px; font-weight: bold; }
     #graph { flex: 1; background: #f5f5f5; position: relative; min-height: 0; transform: translateZ(0); }
+    #heatmap {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0.7;
+      mix-blend-mode: multiply;
+    }
     #controls { position: absolute; top: 100px; left: 20px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); min-width: 250px; }
     .control-section { margin-bottom: 15px; }
     .control-label { font-weight: bold; margin-bottom: 8px; display: block; font-size: 14px; }
@@ -1249,7 +1358,9 @@ export class HtmlVisualizer {
       <div class="stat"><span>Apex:</span><span class="stat-value" id="stat-apex">${(first.stats.componentsByType.ApexClass || 0) + (first.stats.componentsByType.ApexTrigger || 0)}</span></div>
     </div>
   </div>
-  <div id="graph"></div>
+  <div id="graph">
+    <canvas id="heatmap"></canvas>
+  </div>
   <div id="controls">
     <div class="control-section">
       <label class="control-label">Dataset</label>
@@ -1377,27 +1488,8 @@ export class HtmlVisualizer {
       <span>LWC / Aura</span>
     </div>
     <hr style="margin: 12px 0; border: none; border-top: 1px solid #eee;">
-    <div class="legend-title">Dependency Weights</div>
-    <div class="legend-item">
-      <div style="width: 30px; height: 3px; background: #E91E63;"></div>
-      <span style="font-size: 12px;">Critical (9-10)</span>
-    </div>
-    <div class="legend-item">
-      <div style="width: 30px; height: 2.5px; background: #9C27B0;"></div>
-      <span style="font-size: 12px;">Business (7-8)</span>
-    </div>
-    <div class="legend-item">
-      <div style="width: 30px; height: 2px; background: #2196F3;"></div>
-      <span style="font-size: 12px;">Structure (5-6)</span>
-    </div>
-    <div class="legend-item">
-      <div style="width: 30px; height: 1px; background: #757575;"></div>
-      <span style="font-size: 12px;">Operations (3-4)</span>
-    </div>
-    <div class="legend-item">
-      <div style="width: 30px; height: 0.5px; background: #ccc;"></div>
-      <span style="font-size: 12px;">Infrastructure (1-2)</span>
-    </div>
+    <div class="legend-title">Edge Strength</div>
+    <div style="font-size: 12px; color: #666;">Encoded by selected mode in the controls.</div>
   </div>
 
   <script>
@@ -1437,6 +1529,92 @@ export class HtmlVisualizer {
       edges: { width: 1, smooth: { enabled: false }, arrows: { to: { enabled: true, scaleFactor: 0.5 } } },
     };
     const network = new vis.Network(container, data, options);
+
+    // Heatmap background (density of nodes) - cheap grid-based rendering
+    const heatmapCanvas = document.getElementById('heatmap');
+    const heatmapCtx = heatmapCanvas.getContext('2d');
+    let heatmapNodes = nodesDataset.get();
+    let heatmapMaxSize = Math.max(1, ...heatmapNodes.map(n => n.size || 1));
+    let heatmapScheduled = false;
+    let heatmapLastDraw = 0;
+
+    function refreshHeatmapCache() {
+      heatmapNodes = nodesDataset.get();
+      heatmapMaxSize = Math.max(1, ...heatmapNodes.map(n => n.size || 1));
+      scheduleHeatmap(true);
+    }
+
+    function resizeHeatmapCanvas() {
+      const rect = container.getBoundingClientRect();
+      heatmapCanvas.width = Math.max(1, Math.floor(rect.width));
+      heatmapCanvas.height = Math.max(1, Math.floor(rect.height));
+    }
+
+    function scheduleHeatmap(force = false) {
+      const now = performance.now();
+      if (!force && now - heatmapLastDraw < 200) return;
+      if (heatmapScheduled) return;
+      heatmapScheduled = true;
+      requestAnimationFrame(() => {
+        heatmapScheduled = false;
+        drawHeatmap();
+      });
+    }
+
+    function drawHeatmap() {
+      if (!heatmapCtx) return;
+      resizeHeatmapCanvas();
+
+      const width = heatmapCanvas.width;
+      const height = heatmapCanvas.height;
+      const gridSize = 60; // 60x60 grid for performance
+      const cellW = width / gridSize;
+      const cellH = height / gridSize;
+      const grid = new Float32Array(gridSize * gridSize);
+
+      const positions = network.getPositions(heatmapNodes.map(n => n.id));
+      for (const node of heatmapNodes) {
+        const pos = positions[node.id];
+        if (!pos) continue;
+        const dom = network.canvasToDOM(pos);
+        const size = node.size || 10;
+        const intensity = Math.min(3, 0.5 + size / heatmapMaxSize);
+        const gx = Math.max(0, Math.min(gridSize - 1, Math.floor(dom.x / cellW)));
+        const gy = Math.max(0, Math.min(gridSize - 1, Math.floor(dom.y / cellH)));
+        const idx = gy * gridSize + gx;
+        grid[idx] += intensity;
+        // Light smoothing to neighbors (cheap)
+        if (gx + 1 < gridSize) grid[idx + 1] += intensity * 0.4;
+        if (gy + 1 < gridSize) grid[idx + gridSize] += intensity * 0.4;
+        if (gx > 0) grid[idx - 1] += intensity * 0.4;
+        if (gy > 0) grid[idx - gridSize] += intensity * 0.4;
+      }
+
+      let max = 0;
+      for (let i = 0; i < grid.length; i++) {
+        if (grid[i] > max) max = grid[i];
+      }
+      max = Math.max(1, max);
+
+      heatmapCtx.clearRect(0, 0, width, height);
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          const value = grid[y * gridSize + x];
+          if (value <= 0) continue;
+          const alpha = Math.min(0.6, value / max);
+          heatmapCtx.fillStyle = 'rgba(255, 120, 80, ' + alpha.toFixed(3) + ')';
+          heatmapCtx.fillRect(x * cellW, y * cellH, cellW + 0.5, cellH + 0.5);
+        }
+      }
+
+      heatmapLastDraw = performance.now();
+    }
+
+    window.addEventListener('resize', () => scheduleHeatmap(true));
+    network.on('dragEnd', () => scheduleHeatmap());
+    network.on('zoom', () => scheduleHeatmap());
+    network.on('afterDrawing', () => scheduleHeatmap());
+    scheduleHeatmap(true);
 
     // Show labels only at high zoom levels to avoid clutter
     const LABEL_ZOOM_THRESHOLD = 2.0;
@@ -1542,12 +1720,12 @@ export class HtmlVisualizer {
           length = baseLength * (1.4 - 0.8 * n);
         } else if (mode === 'saturation') {
           const sat = 20 + Math.round(80 * n);
-          color = `hsl(215, ${sat}%, 50%)`;
+          color = 'hsl(215, ' + sat + '%, 50%)';
           opacity = 0.9;
           width = 1 + 2 * n;
         } else if (mode === 'lightness') {
           const light = 80 - Math.round(40 * n);
-          color = `hsl(215, 70%, ${light}%)`;
+          color = 'hsl(215, 70%, ' + light + '%)';
           opacity = 0.9;
           width = 1 + 2 * n;
         } else if (mode === 'dashWeak') {
@@ -1636,6 +1814,7 @@ export class HtmlVisualizer {
       edgesDataset.clear();
       nodesDataset.add(nodesWithPositions);
       edgesDataset.add(encodeEdges(filteredEdges, currentEdgeMode));
+      refreshHeatmapCache();
       updateLabelsForZoom(network.getScale());
     }
 
@@ -1692,6 +1871,7 @@ export class HtmlVisualizer {
 
       edgesDataset.clear();
       edgesDataset.add(encodeEdges(updatedEdges, currentEdgeMode));
+      refreshHeatmapCache();
 
       network.setOptions({ physics: { enabled: true } });
       if (shouldFreeze) {
