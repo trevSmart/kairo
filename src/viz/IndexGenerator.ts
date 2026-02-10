@@ -1,0 +1,283 @@
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { dirname } from 'path';
+import type { AnalysisResult } from '../types.js';
+
+export class IndexGenerator {
+  generate(result: AnalysisResult, outputPath: string): void {
+    const dir = dirname(outputPath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+
+    const html = this.generateHtml(result.stats);
+    writeFileSync(outputPath, html);
+    console.log(`📄 Index page saved to: ${outputPath}`);
+  }
+
+  generateMulti(results: AnalysisResult[], names: string[], outputPath: string): void {
+    const dir = dirname(outputPath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const html = this.generateHtmlMulti(results, names);
+    writeFileSync(outputPath, html);
+    console.log(`📄 Index page (multi-dataset) saved to: ${outputPath}`);
+  }
+
+  private generateHtmlMulti(results: AnalysisResult[], names: string[]): string {
+    const totalComponents = results.reduce((s, r) => s + r.stats.totalComponents, 0);
+    const totalDeps = results.reduce((s, r) => s + r.stats.totalDependencies, 0);
+    const datasetList = names.map((name, i) => `${name} (${results[i].stats.totalComponents} components)`).join(', ');
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Kairo - Multi-dataset analysis</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .container { max-width: 900px; width: 100%; }
+    h1 { color: white; font-size: 48px; margin-bottom: 16px; text-align: center; }
+    .subtitle { color: rgba(255,255,255,0.9); font-size: 18px; text-align: center; margin-bottom: 40px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 40px; }
+    .stat-card { background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 20px; text-align: center; color: white; }
+    .stat-value { font-size: 36px; font-weight: bold; margin-bottom: 8px; }
+    .stat-label { font-size: 14px; opacity: 0.9; }
+    .views-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .view-card { background: white; border-radius: 16px; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); text-decoration: none; color: inherit; display: block; transition: transform 0.2s, box-shadow 0.2s; }
+    .view-card:hover { transform: translateY(-4px); box-shadow: 0 15px 50px rgba(0,0,0,0.3); }
+    .view-icon { font-size: 48px; margin-bottom: 16px; }
+    .view-title { font-size: 24px; font-weight: bold; margin-bottom: 12px; color: #333; }
+    .view-description { font-size: 14px; color: #666; line-height: 1.6; }
+    .dataset-list { font-size: 13px; color: #555; margin-top: 12px; }
+    footer { text-align: center; color: rgba(255,255,255,0.8); margin-top: 40px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kairo – Multi-dataset</h1>
+    <p class="subtitle">Switch between datasets in the graph view</p>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-value">${results.length}</div><div class="stat-label">Datasets</div></div>
+      <div class="stat-card"><div class="stat-value">${totalComponents.toLocaleString()}</div><div class="stat-label">Total components</div></div>
+      <div class="stat-card"><div class="stat-value">${totalDeps.toLocaleString()}</div><div class="stat-label">Total dependencies</div></div>
+    </div>
+    <div class="views-grid">
+      <a href="dependency-graph.html" class="view-card">
+        <div class="view-icon">🕸️</div>
+        <div class="view-title">Graph view</div>
+        <div class="view-description">
+          Interactive dependency graph. Use the <strong>Dataset</strong> dropdown in the header to switch between: ${datasetList}.
+        </div>
+      </a>
+    </div>
+    <footer>Generated with Kairo • ${new Date().toLocaleString()}</footer>
+  </div>
+</body>
+</html>`;
+  }
+
+  private generateHtml(stats: AnalysisResult['stats']): string {
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Kairo - Salesforce Metadata Analysis</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      width: 100%;
+    }
+    h1 {
+      color: white;
+      font-size: 48px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .subtitle {
+      color: rgba(255,255,255,0.9);
+      font-size: 18px;
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin-bottom: 40px;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      color: white;
+    }
+    .stat-value {
+      font-size: 36px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .stat-label {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    .views-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .view-card {
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      transition: transform 0.2s, box-shadow 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    .view-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 15px 50px rgba(0,0,0,0.3);
+    }
+    .view-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .view-title {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      color: #333;
+    }
+    .view-description {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .view-features {
+      list-style: none;
+      font-size: 13px;
+      color: #555;
+    }
+    .view-features li {
+      padding: 4px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+    .view-features li:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #667eea;
+      font-weight: bold;
+    }
+    .view-badge {
+      display: inline-block;
+      background: #667eea;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-top: 12px;
+    }
+    .view-badge.recommended {
+      background: #4CAF50;
+    }
+    .view-badge.experimental {
+      background: #FF9800;
+    }
+    footer {
+      text-align: center;
+      color: rgba(255,255,255,0.8);
+      margin-top: 40px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎯 Kairo Analysis Results</h1>
+    <p class="subtitle">Salesforce Org Metadata Analysis</p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">${stats.totalComponents.toLocaleString()}</div>
+        <div class="stat-label">Components</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.totalDependencies.toLocaleString()}</div>
+        <div class="stat-label">Dependencies</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.componentsByType.CustomObject || 0}</div>
+        <div class="stat-label">Objects</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.componentsByType.ApexClass || 0}</div>
+        <div class="stat-label">Apex Classes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.componentsByType.LightningWebComponent || 0}</div>
+        <div class="stat-label">LWC</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.componentsByType.AuraComponent || 0}</div>
+        <div class="stat-label">Aura</div>
+      </div>
+    </div>
+
+    <div class="views-grid">
+      <a href="component-list.html" class="view-card">
+        <div class="view-icon">📋</div>
+        <div class="view-title">List View</div>
+        <div class="view-description">
+          Browse all components as an interactive, searchable list with detailed dependency information.
+        </div>
+        <ul class="view-features">
+          <li>Fast and responsive</li>
+          <li>Advanced search and filters</li>
+          <li>Shows all ${stats.totalComponents.toLocaleString()} components</li>
+          <li>Detailed dependency breakdown</li>
+        </ul>
+        <span class="view-badge recommended">Recommended</span>
+      </a>
+
+      <a href="dependency-graph.html" class="view-card">
+        <div class="view-icon">🕸️</div>
+        <div class="view-title">Graph View</div>
+        <div class="view-description">
+          Visualize dependencies as an interactive network graph with physics simulation.
+        </div>
+        <ul class="view-features">
+          <li>Visual dependency graph</li>
+          <li>Interactive navigation</li>
+          <li>Auto-filtered for performance</li>
+          <li>Best for exploring clusters</li>
+        </ul>
+        <span class="view-badge experimental">Large Dataset</span>
+      </a>
+    </div>
+
+    <footer>
+      Generated with Kairo • ${new Date().toLocaleString()}
+    </footer>
+  </div>
+</body>
+</html>`;
+  }
+}

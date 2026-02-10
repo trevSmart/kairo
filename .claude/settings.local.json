@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "mcp__chrome-devtools__list_pages",
+      "Bash(open:*)"
+    ]
+  }
+}
