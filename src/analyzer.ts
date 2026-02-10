@@ -14,6 +14,7 @@ export class MetadataAnalyzer {
   private lwcParser = new LWCParser();
   private auraParser = new AuraParser();
   private objectNameMap = new Map<string, string>();
+  private standardObjects = new Set(['Account', 'Contact', 'Opportunity', 'Case', 'Lead']);
 
   private isTestClass(filePath: string): boolean {
     try {
@@ -33,12 +34,20 @@ export class MetadataAnalyzer {
     const graphBuilder = new GraphBuilder();
     let processed = 0;
 
+    for (const obj of this.standardObjects) {
+      this.objectNameMap.set(obj.toLowerCase(), obj);
+    }
+
     const resolveObjectName = (name: string): string => {
       const key = name.toLowerCase();
       const existing = this.objectNameMap.get(key);
       if (existing) return existing;
       this.objectNameMap.set(key, name);
       return name;
+    };
+    const isObjectName = (name: string): boolean => {
+      if (this.objectNameMap.has(name.toLowerCase())) return true;
+      return /__(c|mdt|x|kav)$/i.test(name);
     };
 
     for (const file of files) {
@@ -50,11 +59,11 @@ export class MetadataAnalyzer {
           dependencies.forEach(dep => graphBuilder.addDependency(dep));
         } else if (file.type === 'ApexClass') {
           if (this.isTestClass(file.path)) continue;
-          const { component, dependencies } = this.apexParser.parse(file.path, 'ApexClass', resolveObjectName);
+          const { component, dependencies } = this.apexParser.parse(file.path, 'ApexClass', resolveObjectName, isObjectName);
           graphBuilder.addComponent(component);
           dependencies.forEach(dep => graphBuilder.addDependency(dep));
         } else if (file.type === 'ApexTrigger') {
-          const { component, dependencies } = this.apexParser.parse(file.path, 'ApexTrigger', resolveObjectName);
+          const { component, dependencies } = this.apexParser.parse(file.path, 'ApexTrigger', resolveObjectName, isObjectName);
           graphBuilder.addComponent(component);
           dependencies.forEach(dep => graphBuilder.addDependency(dep));
         } else if (file.type === 'LWC') {
