@@ -903,6 +903,61 @@ export class HtmlVisualizer {
       return descriptions[value] || \`Weight >= \${value}\`;
     }
 
+    function weightStats(edges) {
+      let min = Infinity;
+      let max = -Infinity;
+      edges.forEach(e => {
+        const w = e.weight || 0;
+        if (w < min) min = w;
+        if (w > max) max = w;
+      });
+      if (min === Infinity) min = 0;
+      if (max === -Infinity) max = 0;
+      return { min, max, range: Math.max(1e-6, max - min) };
+    }
+
+    function encodeEdges(edges, mode) {
+      const { min, max, range } = weightStats(edges);
+      return edges.map(e => {
+        const w = e.weight || 0;
+        const n = Math.min(1, Math.max(0, (w - min) / range));
+        const baseLength = e.baseLength != null ? e.baseLength : e.length;
+        let color = '#3b6ef5';
+        let opacity = 0.15 + 0.85 * n;
+        let width = 0.5 + 3.5 * n;
+        let length = baseLength;
+        let dashes = false;
+
+        if (mode === 'thicknessOpacityLength') {
+          length = baseLength * (1.4 - 0.8 * n);
+        } else if (mode === 'saturation') {
+          const sat = 20 + Math.round(80 * n);
+          color = `hsl(215, ${sat}%, 50%)`;
+          opacity = 0.9;
+          width = 1 + 2 * n;
+        } else if (mode === 'lightness') {
+          const light = 80 - Math.round(40 * n);
+          color = `hsl(215, 70%, ${light}%)`;
+          opacity = 0.9;
+          width = 1 + 2 * n;
+        } else if (mode === 'dashWeak') {
+          dashes = n < 0.4 ? [6, 6] : false;
+          opacity = 0.4 + 0.6 * n;
+          width = 0.8 + 2.8 * n;
+        }
+
+        return { ...e, color: { color, opacity }, width, length, dashes };
+      });
+    }
+
+    let currentEdgeMode = 'thicknessOpacity';
+    function setEdgeEncoding(mode) {
+      currentEdgeMode = mode;
+      const updated = encodeEdges(edgesDataset.get(), currentEdgeMode);
+      edgesDataset.clear();
+      edgesDataset.add(updated);
+    }
+
     function applyFilters() {
       const checkboxes = document.querySelectorAll('#controls input[type="checkbox"]');
       const selectedTypes = Array.from(checkboxes)
@@ -941,7 +996,7 @@ export class HtmlVisualizer {
       nodesDataset.clear();
       edgesDataset.clear();
       nodesDataset.add(nodesWithPositions);
-      edgesDataset.add(filteredEdges);
+      edgesDataset.add(encodeEdges(filteredEdges, currentEdgeMode));
       updateLabelsForZoom(network.getScale());
     }
 
@@ -1064,12 +1119,12 @@ export class HtmlVisualizer {
         }
         springLength = springLength * (1 - fidelity * FIDELITY_PULL);
 
-        return { ...edge, length: springLength };
+        return { ...edge, length: springLength, baseLength: springLength };
       });
 
       // Update edges in dataset
       edgesDataset.clear();
-      edgesDataset.add(updatedEdges);
+      edgesDataset.add(encodeEdges(updatedEdges, currentEdgeMode));
 
       // Re-enable physics temporarily to apply changes
       network.setOptions({ physics: { enabled: true } });
@@ -1385,6 +1440,7 @@ export class HtmlVisualizer {
     let currentRecommended = allDatasets[0].recommended;
     let connectionCounts = new Map();
     let shouldFreeze = allDatasets[0].visNodes.length <= 900;
+    let currentEdgeMode = 'thicknessOpacity';
 
     function weightDescription(value) {
       const descriptions = {
@@ -1434,6 +1490,60 @@ export class HtmlVisualizer {
       updateStats(index);
       applyPhysicsMode();
       resetView();
+    }
+
+    function weightStats(edges) {
+      let min = Infinity;
+      let max = -Infinity;
+      edges.forEach(e => {
+        const w = e.weight || 0;
+        if (w < min) min = w;
+        if (w > max) max = w;
+      });
+      if (min === Infinity) min = 0;
+      if (max === -Infinity) max = 0;
+      return { min, max, range: Math.max(1e-6, max - min) };
+    }
+
+    function encodeEdges(edges, mode) {
+      const { min, max, range } = weightStats(edges);
+      return edges.map(e => {
+        const w = e.weight || 0;
+        const n = Math.min(1, Math.max(0, (w - min) / range));
+        const baseLength = e.baseLength != null ? e.baseLength : e.length;
+        let color = '#3b6ef5';
+        let opacity = 0.15 + 0.85 * n;
+        let width = 0.5 + 3.5 * n;
+        let length = baseLength;
+        let dashes = false;
+
+        if (mode === 'thicknessOpacityLength') {
+          length = baseLength * (1.4 - 0.8 * n);
+        } else if (mode === 'saturation') {
+          const sat = 20 + Math.round(80 * n);
+          color = `hsl(215, ${sat}%, 50%)`;
+          opacity = 0.9;
+          width = 1 + 2 * n;
+        } else if (mode === 'lightness') {
+          const light = 80 - Math.round(40 * n);
+          color = `hsl(215, 70%, ${light}%)`;
+          opacity = 0.9;
+          width = 1 + 2 * n;
+        } else if (mode === 'dashWeak') {
+          dashes = n < 0.4 ? [6, 6] : false;
+          opacity = 0.4 + 0.6 * n;
+          width = 0.8 + 2.8 * n;
+        }
+
+        return { ...e, color: { color, opacity }, width, length, dashes };
+      });
+    }
+
+    function setEdgeEncoding(mode) {
+      currentEdgeMode = mode;
+      const updated = encodeEdges(edgesDataset.get(), currentEdgeMode);
+      edgesDataset.clear();
+      edgesDataset.add(updated);
     }
 
     selectEl.addEventListener('change', function() { onDatasetChange(parseInt(this.value, 10)); });
@@ -1504,7 +1614,7 @@ export class HtmlVisualizer {
       nodesDataset.clear();
       edgesDataset.clear();
       nodesDataset.add(nodesWithPositions);
-      edgesDataset.add(filteredEdges);
+      edgesDataset.add(encodeEdges(filteredEdges, currentEdgeMode));
       updateLabelsForZoom(network.getScale());
     }
 
@@ -1560,7 +1670,7 @@ export class HtmlVisualizer {
       });
 
       edgesDataset.clear();
-      edgesDataset.add(updatedEdges);
+      edgesDataset.add(encodeEdges(updatedEdges, currentEdgeMode));
 
       network.setOptions({ physics: { enabled: true } });
       if (shouldFreeze) {
