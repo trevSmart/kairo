@@ -1304,6 +1304,27 @@ export class HtmlVisualizer {
     </div>
 
     <div class="control-section">
+      <label class="control-label">Edge Strength Encoding</label>
+      <div class="checkbox-group">
+        <label class="checkbox-item">
+          <input type="radio" name="edge-encoding" value="thicknessOpacity" checked onchange="setEdgeEncoding(this.value)"> Thickness + Opacity
+        </label>
+        <label class="checkbox-item">
+          <input type="radio" name="edge-encoding" value="thicknessOpacityLength" onchange="setEdgeEncoding(this.value)"> Thickness + Opacity + Length
+        </label>
+        <label class="checkbox-item">
+          <input type="radio" name="edge-encoding" value="saturation" onchange="setEdgeEncoding(this.value)"> Single Color (Saturation)
+        </label>
+        <label class="checkbox-item">
+          <input type="radio" name="edge-encoding" value="lightness" onchange="setEdgeEncoding(this.value)"> Single Color (Lightness)
+        </label>
+        <label class="checkbox-item">
+          <input type="radio" name="edge-encoding" value="dashWeak" onchange="setEdgeEncoding(this.value)"> Dash Weak + Thickness
+        </label>
+      </div>
+    </div>
+
+    <div class="control-section">
       <label class="control-label">Weak Relation Threshold</label>
       <input type="range" id="weak-threshold" min="1" max="10" value="5" step="0.5" onchange="updatePhysics()">
       <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
@@ -1666,7 +1687,7 @@ export class HtmlVisualizer {
         }
         springLength = springLength * (1 - fidelity * FIDELITY_PULL);
 
-        return { ...edge, length: springLength };
+        return { ...edge, length: springLength, baseLength: springLength };
       });
 
       edgesDataset.clear();
