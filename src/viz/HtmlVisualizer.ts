@@ -17,6 +17,9 @@ type VisNode = {
   shape: string;
   size: number;
   image?: string;
+  borderWidth?: number;
+  borderWidthSelected?: number;
+  shapeProperties?: Record<string, unknown>;
   heatColor?: string;
   metadata: NodeInput;
 };
@@ -55,9 +58,9 @@ const STANDARD_OBJECT_ICONS: Record<string, string> = {
   task: 'task',
   event: 'event',
   contract: 'contract',
-  asset: 'asset',
+  asset: 'product',
   product: 'product',
-  order: 'order',
+  order: 'product',
   report: 'report',
   dashboard: 'dashboard',
 };
@@ -265,11 +268,23 @@ function buildVisData(
       label: '',
       fullLabel: node.name,
       title: String(node.label || node.name || node.id || node.type || ''),
-      color: nodeColor,
+      color: hasIcon
+        ? {
+            background: '#c4b5fd',
+            border: '#8b5cf6',
+            highlight: { background: '#b197fc', border: '#7c3aed' },
+            hover: { background: '#b79cff', border: '#7c3aed' },
+          }
+        : nodeColor,
       font: { size: 12, color: '#333' },
       shape: hasIcon ? 'image' : 'dot',
       size: hasIcon ? 42 : nodeSize,
       image: iconUrl,
+      borderWidth: hasIcon ? 2 : undefined,
+      borderWidthSelected: hasIcon ? 3 : undefined,
+      shapeProperties: hasIcon
+        ? { useBorderWithImage: true, useImageSize: false, borderDashes: false }
+        : { borderDashes: false },
       heatColor: nodeCommunityColor.get(node.id) || baseHex,
       metadata: node,
     };
@@ -478,13 +493,18 @@ export class HtmlVisualizer {
       margin-bottom: 10px;
     }
     .info-icon {
-      width: 40px;
-      height: 40px;
+      width: 48px;
+      height: 48px;
       display: flex;
       align-items: center;
       justify-content: center;
+      background: rgba(102, 126, 234, 0.15);
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      flex-shrink: 0;
     }
-    .info-icon svg {
+    .info-icon svg,
+    .info-icon img {
       width: 32px;
       height: 32px;
       fill: #0b0f50;
@@ -533,18 +553,96 @@ export class HtmlVisualizer {
       left: 20px;
       background: white;
       border-radius: 8px;
-      padding: 15px;
+      padding: 10px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-      min-width: 250px;
+      width: 280px;
+      max-height: calc(100vh - 130px);
+      overflow-y: auto;
     }
     .control-section {
-      margin-bottom: 15px;
+      margin-bottom: 7px;
     }
     .control-label {
-      font-weight: bold;
-      margin-bottom: 8px;
+      font-weight: 600;
+      margin-bottom: 4px;
       display: block;
-      font-size: 14px;
+      font-size: 12px;
+      color: #2f3a56;
+    }
+    .control-inline {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .control-inline button {
+      margin-top: 0;
+      flex: 1;
+    }
+    .compact-options-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px 8px;
+    }
+    .compact-slider-row {
+      margin-bottom: 7px;
+    }
+    .compact-slider-row:last-child {
+      margin-bottom: 0;
+    }
+    .inline-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .inline-label span {
+      font-weight: 700;
+      color: #4d5fd3;
+      font-size: 11px;
+      min-width: 24px;
+      text-align: right;
+    }
+    .slider-scale {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .slider-help {
+      font-size: 10px;
+      color: #666;
+      margin-top: 2px;
+      line-height: 1.2;
+    }
+    .advanced-group {
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 4px 6px 6px;
+      margin-bottom: 7px;
+      background: #fafbff;
+    }
+    .advanced-group summary {
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      color: #44506d;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+    .advanced-group summary::-webkit-details-marker {
+      display: none;
+    }
+    .advanced-group summary::before {
+      content: '▸';
+      font-size: 10px;
+      transition: transform 0.15s ease;
+    }
+    .advanced-group[open] summary::before {
+      transform: rotate(90deg);
     }
     .test-set-controls {
       display: flex;
@@ -609,34 +707,34 @@ export class HtmlVisualizer {
     .checkbox-group {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
     }
     .checkbox-item {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
+      font-size: 12px;
     }
     input[type="checkbox"] {
       cursor: pointer;
     }
     input[type="text"] {
       width: 100%;
-      padding: 8px;
+      padding: 6px;
       border: 1px solid #ddd;
       border-radius: 4px;
-      font-size: 13px;
+      font-size: 12px;
     }
     button {
       width: 100%;
-      padding: 8px;
+      padding: 6px 8px;
       background: #667eea;
       color: white;
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 13px;
-      margin-top: 8px;
+      font-size: 12px;
+      margin-top: 6px;
     }
     button:hover {
       background: #5568d3;
@@ -698,13 +796,15 @@ export class HtmlVisualizer {
     <div class="control-section">
       <label class="control-label">Search Component</label>
       <input type="text" id="search-input" placeholder="Type to filter nodes...">
-      <button onclick="resetView()">Reset View</button>
-      <button onclick="applyRecommended()">Auto Focus</button>
+      <div class="control-inline">
+        <button onclick="resetView()">Reset View</button>
+        <button onclick="applyRecommended()">Auto Focus</button>
+      </div>
     </div>
 
     <div class="control-section">
       <label class="control-label">Filter by Type</label>
-      <div class="checkbox-group">
+      <div class="checkbox-group compact-options-grid">
         <label class="checkbox-item">
           <input type="checkbox" value="CustomObject" checked onchange="filterByType()"> Objects
         </label>
@@ -727,80 +827,50 @@ export class HtmlVisualizer {
     </div>
 
     <div class="control-section">
-      <label class="control-label">Min Connections</label>
-      <input type="range" id="min-connections" min="0" max="20" value="${recommended.minConnections}" oninput="filterByConnections(this.value)">
-      <span id="connections-value">${recommended.minConnections}</span>
-    </div>
-
-    <div class="control-section">
-      <label class="control-label">Min Island Size</label>
-      <input type="range" id="min-members" min="1" max="50" value="1" oninput="filterByMembers(this.value)">
-      <span id="members-value">1</span>
-    </div>
-
-    <div class="control-section">
-      <label class="control-label">Dependency Weight Filter</label>
-      <input type="range" id="min-weight" min="0" max="10" value="3" oninput="filterByWeight(this.value)">
-      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
-        <span>All</span>
-        <span id="weight-value">3</span>
-        <span>Process Only</span>
+      <div class="compact-slider-row">
+        <label class="control-label inline-label" for="min-connections">Min Connections <span id="connections-value">${recommended.minConnections}</span></label>
+        <input type="range" id="min-connections" min="0" max="20" value="${recommended.minConnections}" oninput="filterByConnections(this.value)">
       </div>
-      <div style="font-size: 11px; color: #666; margin-top: 4px;" id="weight-description">${describeWeight(3)}</div>
-    </div>
-
-    <div class="control-section">
-      <label class="control-label">Test Sets</label>
-      <div class="test-set-controls">
-        <input type="text" id="test-set-name" placeholder="Alias (optional)">
-        <input type="file" id="test-folder-input" webkitdirectory directory multiple>
-        <button type="button" id="test-set-add">Add test set</button>
+      <div class="compact-slider-row">
+        <label class="control-label inline-label" for="min-members">Min Island Size <span id="members-value">3</span></label>
+        <input type="range" id="min-members" min="1" max="50" value="3" oninput="filterByMembers(this.value)">
       </div>
-      <div id="test-set-list" class="test-set-list"></div>
-    </div>
-
-    <div class="control-section">
-      <label class="control-label">Edge Strength Encoding</label>
-      <div class="checkbox-group">
-        <label class="checkbox-item">
-          <input type="radio" name="edge-encoding" value="thicknessOpacity" checked onchange="setEdgeEncoding(this.value)"> Thickness + Opacity
-        </label>
-        <label class="checkbox-item">
-          <input type="radio" name="edge-encoding" value="thicknessOpacityLength" onchange="setEdgeEncoding(this.value)"> Thickness + Opacity + Length
-        </label>
-        <label class="checkbox-item">
-          <input type="radio" name="edge-encoding" value="saturation" onchange="setEdgeEncoding(this.value)"> Single Color (Saturation)
-        </label>
-        <label class="checkbox-item">
-          <input type="radio" name="edge-encoding" value="lightness" onchange="setEdgeEncoding(this.value)"> Single Color (Lightness)
-        </label>
-        <label class="checkbox-item">
-          <input type="radio" name="edge-encoding" value="dashWeak" onchange="setEdgeEncoding(this.value)"> Dash Weak + Thickness
-        </label>
+      <div class="compact-slider-row">
+        <label class="control-label inline-label" for="min-weight">Dependency Weight <span id="weight-value">3</span></label>
+        <input type="range" id="min-weight" min="0" max="10" value="3" oninput="filterByWeight(this.value)">
+        <div class="slider-scale">
+          <span>All</span>
+          <span>Process</span>
+        </div>
+        <div class="slider-help" id="weight-description">${describeWeight(3)}</div>
       </div>
     </div>
 
-    <div class="control-section">
-      <label class="control-label">Weak Relation Threshold</label>
-      <input type="range" id="weak-threshold" min="1" max="10" value="5" step="0.5" onchange="updatePhysics()">
-      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
-        <span>1</span>
-        <span id="weak-threshold-value">5</span>
-        <span>10</span>
+    <details class="advanced-group">
+      <summary>Advanced: Edge + Physics + Test Sets</summary>
+      <div class="control-section">
+        <label class="control-label">Weak Relation Physics</label>
+        <div class="compact-slider-row">
+          <label class="control-label inline-label" for="weak-threshold">Threshold <span id="weak-threshold-value">5</span></label>
+          <input type="range" id="weak-threshold" min="1" max="10" value="5" step="0.5" onchange="updatePhysics()">
+        </div>
+        <div class="compact-slider-row">
+          <label class="control-label inline-label" for="weak-repulsion">Repulsion <span id="weak-repulsion-value">5</span></label>
+          <input type="range" id="weak-repulsion" min="1" max="50" value="5" step="0.5" onchange="updatePhysics()">
+        </div>
+        <div class="slider-help">Threshold separates weak/strong edges; repulsion controls weak-edge spacing.</div>
       </div>
-      <div style="font-size: 11px; color: #666; margin-top: 4px;">Relations below this weight are considered weak</div>
-    </div>
 
-    <div class="control-section">
-      <label class="control-label">Weak Relation Repulsion</label>
-      <input type="range" id="weak-repulsion" min="1" max="50" value="5" step="0.5" onchange="updatePhysics()">
-      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
-        <span>Less</span>
-        <span id="weak-repulsion-value">5</span>
-        <span>50</span>
+      <div class="control-section">
+        <label class="control-label">Test Sets</label>
+        <div class="test-set-controls">
+          <input type="text" id="test-set-name" placeholder="Alias (optional)">
+          <input type="file" id="test-folder-input" webkitdirectory directory multiple>
+          <button type="button" id="test-set-add">Add test set</button>
+        </div>
+        <div id="test-set-list" class="test-set-list"></div>
       </div>
-      <div style="font-size: 11px; color: #666; margin-top: 4px;">How much weak relations repel each other</div>
-    </div>
+    </details>
   </div>
 
   <div id="info-panel">
@@ -862,9 +932,9 @@ export class HtmlVisualizer {
       task: 'task',
       event: 'event',
       contract: 'contract',
-      asset: 'asset',
+      asset: 'product',
       product: 'product',
-      order: 'order',
+      order: 'product',
       report: 'report',
       dashboard: 'dashboard'
     };
@@ -908,7 +978,7 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
         iconNode.innerHTML = '';
         return;
       }
-      iconNode.innerHTML = '<img src=\"' + ICON_BASE + iconName + '.svg\" alt=\"\" style=\"width:32px;height:32px;\">';
+      iconNode.innerHTML = '<img src=\"' + ICON_BASE + iconName + '.svg\" alt=\"\">';
     }
 
     // Count connections for each node to scale size
@@ -943,11 +1013,23 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
         label: '',
         fullLabel: node.name,
         title: String(node.label || node.name || node.id || node.type || ''),
-        color: nodeColor,
+        color: hasIcon
+          ? {
+              background: '#c4b5fd',
+              border: '#8b5cf6',
+              highlight: { background: '#b197fc', border: '#7c3aed' },
+              hover: { background: '#b79cff', border: '#7c3aed' },
+            }
+          : nodeColor,
         font: { size: 12, color: '#333' },
         shape: hasIcon ? 'image' : 'dot',
         size: hasIcon ? 42 : nodeSize,
         image: iconUrl || undefined,
+        borderWidth: hasIcon ? 2 : undefined,
+        borderWidthSelected: hasIcon ? 3 : undefined,
+        shapeProperties: hasIcon
+          ? { useBorderWithImage: true, useImageSize: false, borderDashes: false }
+          : { borderDashes: false },
         heatColor: islandColor.get(node.id) || baseHex,
         metadata: node,
       };
@@ -1043,7 +1125,7 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       },
       // Note: vis-network v9 does not support "rendering" options.
       layout: {
-        improvedLayout: true,
+        improvedLayout: false,
       },
       interaction: {
         hover: true,
@@ -1062,6 +1144,9 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
         },
         borderWidth: 2,
         borderWidthSelected: 3,
+        shapeProperties: {
+          borderDashes: false,
+        },
       },
       edges: {
         width: 1,
@@ -1328,7 +1413,7 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
     let allEdges = visEdges.slice();
     const DEFAULT_MIN_WEIGHT = 3;
     const DEFAULT_MIN_CONNECTIONS = ${recommended.minConnections};
-    const DEFAULT_MIN_MEMBERS = 1;
+    const DEFAULT_MIN_MEMBERS = 3;
 
     function weightDescription(value) {
       const descriptions = {
@@ -1355,7 +1440,7 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       return { min, max, range: Math.max(1e-6, max - min) };
     }
 
-    function encodeEdges(edges, mode) {
+    function encodeEdges(edges) {
       const { min, max, range } = weightStats(edges);
       return edges.map(e => {
         const w = e.weight || 0;
@@ -1365,36 +1450,8 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       let opacity = 0.35 + 0.65 * n;
         let width = 0.5 + 3.5 * n;
         let length = baseLength;
-        let dashes = false;
-
-        if (mode === 'thicknessOpacityLength') {
-          length = baseLength * (1.4 - 0.8 * n);
-        } else if (mode === 'saturation') {
-          const sat = 20 + Math.round(80 * n);
-          color = 'hsl(215, ' + sat + '%, 50%)';
-        opacity = 0.9;
-          width = 1 + 2 * n;
-        } else if (mode === 'lightness') {
-          const light = 80 - Math.round(40 * n);
-          color = 'hsl(215, 70%, ' + light + '%)';
-        opacity = 0.9;
-          width = 1 + 2 * n;
-        } else if (mode === 'dashWeak') {
-          dashes = n < 0.4 ? [6, 6] : false;
-        opacity = 0.5 + 0.5 * n;
-          width = 0.8 + 2.8 * n;
-        }
-
-        return { ...e, color: { color, opacity }, width, length, dashes };
+        return { ...e, color: { color, opacity }, width, length, dashes: false };
       });
-    }
-
-    let currentEdgeMode = 'thicknessOpacity';
-    function setEdgeEncoding(mode) {
-      currentEdgeMode = mode;
-      const updated = encodeEdges(edgesDataset.get(), currentEdgeMode);
-      edgesDataset.clear();
-      edgesDataset.add(updated);
     }
 
     function pruneSmallComponents(nodesArr, edgesArr, minMembers) {
@@ -1473,7 +1530,7 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       nodesDataset.clear();
       edgesDataset.clear();
       nodesDataset.add(nodesWithPositions.filter(n => finalNodeIds.has(n.id)));
-      edgesDataset.add(encodeEdges(filteredEdges, currentEdgeMode));
+      edgesDataset.add(encodeEdges(filteredEdges));
       refreshHeatmapCache();
       updateLabelsForZoom(network.getScale());
     }
@@ -1614,7 +1671,7 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
 
       // Update edges in dataset
       edgesDataset.clear();
-      edgesDataset.add(encodeEdges(updatedEdges, currentEdgeMode));
+      edgesDataset.add(encodeEdges(updatedEdges));
       refreshHeatmapCache();
 
       // Re-enable physics temporarily to apply changes
@@ -1700,20 +1757,35 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       opacity: 0.7;
       mix-blend-mode: multiply;
     }
-    #controls { position: absolute; top: 100px; left: 20px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); min-width: 250px; }
-    .control-section { margin-bottom: 15px; }
-    .control-label { font-weight: bold; margin-bottom: 8px; display: block; font-size: 14px; }
-    .checkbox-group { display: flex; flex-direction: column; gap: 6px; }
-    .checkbox-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+    #controls { position: absolute; top: 100px; left: 20px; background: white; border-radius: 8px; padding: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 280px; max-height: calc(100vh - 130px); overflow-y: auto; }
+    .control-section { margin-bottom: 7px; }
+    .control-label { font-weight: 600; margin-bottom: 4px; display: block; font-size: 12px; color: #2f3a56; }
+    .control-inline { display: flex; gap: 6px; align-items: center; }
+    .control-inline button { margin-top: 0; flex: 1; }
+    .compact-options-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; }
+    .compact-slider-row { margin-bottom: 7px; }
+    .compact-slider-row:last-child { margin-bottom: 0; }
+    .inline-label { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .inline-label span { font-weight: 700; color: #4d5fd3; font-size: 11px; min-width: 24px; text-align: right; }
+    .slider-scale { display: flex; justify-content: space-between; font-size: 10px; color: #6b7280; margin-top: 2px; }
+    .slider-help { font-size: 10px; color: #666; margin-top: 2px; line-height: 1.2; }
+    .advanced-group { border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px 6px 6px; margin-bottom: 7px; background: #fafbff; }
+    .advanced-group summary { cursor: pointer; font-size: 11px; font-weight: 700; color: #44506d; list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
+    .advanced-group summary::-webkit-details-marker { display: none; }
+    .advanced-group summary::before { content: '▸'; font-size: 10px; transition: transform 0.15s ease; }
+    .advanced-group[open] summary::before { transform: rotate(90deg); }
+    .checkbox-group { display: flex; flex-direction: column; gap: 4px; }
+    .checkbox-item { display: flex; align-items: center; gap: 6px; font-size: 12px; }
     input[type="checkbox"] { cursor: pointer; }
-    input[type="text"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
-    button { width: 100%; padding: 8px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; margin-top: 8px; }
+    input[type="text"] { width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
+    button { width: 100%; padding: 6px 8px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 6px; }
     button:hover { background: #5568d3; }
     #info-panel { position: absolute; top: 100px; right: 20px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); max-width: 300px; display: none; }
     #info-panel.visible { display: block; }
     .info-title-wrapper { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .info-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
-    .info-icon svg { width: 32px; height: 32px; fill: #0b0f50; }
+    .info-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: rgba(102, 126, 234, 0.15); border: 2px solid #667eea; border-radius: 8px; }
+    .info-icon svg,
+    .info-icon img { width: 32px; height: 32px; fill: #0b0f50; }
     .info-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #667eea; }
     .info-row { margin: 5px 0; font-size: 14px; }
     .legend { position: absolute; bottom: 20px; right: 20px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
@@ -1761,13 +1833,15 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
     <div class="control-section">
       <label class="control-label">Search</label>
       <input type="text" id="search-input" placeholder="Type to filter nodes...">
-      <button onclick="resetView()">Reset View</button>
-      <button onclick="applyRecommended()">Auto Focus</button>
+      <div class="control-inline">
+        <button onclick="resetView()">Reset View</button>
+        <button onclick="applyRecommended()">Auto Focus</button>
+      </div>
     </div>
 
     <div class="control-section">
       <label class="control-label">Filter by Type</label>
-      <div class="checkbox-group">
+      <div class="checkbox-group compact-options-grid">
         <label class="checkbox-item">
           <input type="checkbox" value="CustomObject" checked onchange="filterByType()"> Objects
         </label>
@@ -1790,80 +1864,50 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
     </div>
 
     <div class="control-section">
-      <label class="control-label">Min Connections</label>
-      <input type="range" id="min-connections" min="0" max="20" value="${first.recommended.minConnections}" oninput="filterByConnections(this.value)">
-      <span id="connections-value">${first.recommended.minConnections}</span>
-    </div>
-
-    <div class="control-section">
-      <label class="control-label">Min Island Size</label>
-      <input type="range" id="min-members" min="1" max="50" value="1" oninput="filterByMembers(this.value)">
-      <span id="members-value">1</span>
-    </div>
-
-    <div class="control-section">
-      <label class="control-label">Dependency Weight Filter</label>
-      <input type="range" id="min-weight" min="0" max="10" value="3" oninput="filterByWeight(this.value)">
-      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
-        <span>All</span>
-        <span id="weight-value">3</span>
-        <span>Process Only</span>
+      <div class="compact-slider-row">
+        <label class="control-label inline-label" for="min-connections">Min Connections <span id="connections-value">${first.recommended.minConnections}</span></label>
+        <input type="range" id="min-connections" min="0" max="20" value="${first.recommended.minConnections}" oninput="filterByConnections(this.value)">
       </div>
-      <div style="font-size: 11px; color: #666; margin-top: 4px;" id="weight-description">${describeWeight(3)}</div>
-    </div>
-
-    <div class="control-section">
-      <label class="control-label">Test Sets</label>
-      <div class="test-set-controls">
-        <input type="text" id="test-set-name" placeholder="Alias (optional)">
-        <input type="file" id="test-folder-input" webkitdirectory directory multiple>
-        <button type="button" id="test-set-add">Add test set</button>
+      <div class="compact-slider-row">
+        <label class="control-label inline-label" for="min-members">Min Island Size <span id="members-value">3</span></label>
+        <input type="range" id="min-members" min="1" max="50" value="3" oninput="filterByMembers(this.value)">
       </div>
-      <div id="test-set-list" class="test-set-list"></div>
-    </div>
-
-    <div class="control-section">
-      <label class="control-label">Edge Strength Encoding</label>
-      <div class="checkbox-group">
-        <label class="checkbox-item">
-          <input type="radio" name="edge-encoding" value="thicknessOpacity" checked onchange="setEdgeEncoding(this.value)"> Thickness + Opacity
-        </label>
-        <label class="checkbox-item">
-          <input type="radio" name="edge-encoding" value="thicknessOpacityLength" onchange="setEdgeEncoding(this.value)"> Thickness + Opacity + Length
-        </label>
-        <label class="checkbox-item">
-          <input type="radio" name="edge-encoding" value="saturation" onchange="setEdgeEncoding(this.value)"> Single Color (Saturation)
-        </label>
-        <label class="checkbox-item">
-          <input type="radio" name="edge-encoding" value="lightness" onchange="setEdgeEncoding(this.value)"> Single Color (Lightness)
-        </label>
-        <label class="checkbox-item">
-          <input type="radio" name="edge-encoding" value="dashWeak" onchange="setEdgeEncoding(this.value)"> Dash Weak + Thickness
-        </label>
+      <div class="compact-slider-row">
+        <label class="control-label inline-label" for="min-weight">Dependency Weight <span id="weight-value">3</span></label>
+        <input type="range" id="min-weight" min="0" max="10" value="3" oninput="filterByWeight(this.value)">
+        <div class="slider-scale">
+          <span>All</span>
+          <span>Process</span>
+        </div>
+        <div class="slider-help" id="weight-description">${describeWeight(3)}</div>
       </div>
     </div>
 
-    <div class="control-section">
-      <label class="control-label">Weak Relation Threshold</label>
-      <input type="range" id="weak-threshold" min="1" max="10" value="5" step="0.5" onchange="updatePhysics()">
-      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
-        <span>1</span>
-        <span id="weak-threshold-value">5</span>
-        <span>10</span>
+    <details class="advanced-group">
+      <summary>Advanced: Edge + Physics + Test Sets</summary>
+      <div class="control-section">
+        <label class="control-label">Weak Relation Physics</label>
+        <div class="compact-slider-row">
+          <label class="control-label inline-label" for="weak-threshold">Threshold <span id="weak-threshold-value">5</span></label>
+          <input type="range" id="weak-threshold" min="1" max="10" value="5" step="0.5" onchange="updatePhysics()">
+        </div>
+        <div class="compact-slider-row">
+          <label class="control-label inline-label" for="weak-repulsion">Repulsion <span id="weak-repulsion-value">5</span></label>
+          <input type="range" id="weak-repulsion" min="1" max="50" value="5" step="0.5" onchange="updatePhysics()">
+        </div>
+        <div class="slider-help">Threshold separates weak/strong edges; repulsion controls weak-edge spacing.</div>
       </div>
-      <div style="font-size: 11px; color: #666; margin-top: 4px;">Relations below this weight are considered weak</div>
-    </div>
 
-    <div class="control-section">
-      <label class="control-label">Weak Relation Repulsion</label>
-      <input type="range" id="weak-repulsion" min="1" max="50" value="5" step="0.5" onchange="updatePhysics()">
-      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
-        <span>Less</span>
-        <span id="weak-repulsion-value">5</span>
-        <span>50</span>
+      <div class="control-section">
+        <label class="control-label">Test Sets</label>
+        <div class="test-set-controls">
+          <input type="text" id="test-set-name" placeholder="Alias (optional)">
+          <input type="file" id="test-folder-input" webkitdirectory directory multiple>
+          <button type="button" id="test-set-add">Add test set</button>
+        </div>
+        <div id="test-set-list" class="test-set-list"></div>
       </div>
-      <div style="font-size: 11px; color: #666; margin-top: 4px;">How much weak relations repel each other</div>
-    </div>
+    </details>
   </div>
 
   <div id="info-panel">
@@ -1916,9 +1960,9 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       task: 'task',
       event: 'event',
       contract: 'contract',
-      asset: 'asset',
+      asset: 'product',
       product: 'product',
-      order: 'order',
+      order: 'product',
       report: 'report',
       dashboard: 'dashboard'
     };
@@ -1943,13 +1987,14 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
         iconNode.innerHTML = '';
         return;
       }
-      iconNode.innerHTML = '<img src=\"' + ICON_BASE + iconName + '.svg\" alt=\"\" style=\"width:32px;height:32px;\">';
+      iconNode.innerHTML = '<img src=\"' + ICON_BASE + iconName + '.svg\" alt=\"\">';
     }
 
     function populateDatasetSelects() {
       const selectHeader = document.getElementById('dataset-select');
       const selectControls = document.getElementById('dataset-select-controls');
       [selectHeader, selectControls].forEach(sel => {
+        if (!sel) return;
         sel.innerHTML = '';
         allDatasets.forEach((d, i) => {
           const opt = document.createElement('option');
@@ -1959,7 +2004,9 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
         });
       });
     }
-    populateDatasetSelects();
+    if (allDatasets && allDatasets.length > 0) {
+      populateDatasetSelects();
+    }
 
     const selectEl = document.getElementById('dataset-select');
     const selectControls = document.getElementById('dataset-select-controls');
@@ -1969,13 +2016,31 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       switchDataset(index);
     }
 
+    // KAIRO-FIX: Add event listeners for dataset change
+    if (selectEl) {
+      selectEl.addEventListener('change', function() {
+        const index = parseInt(this.value);
+        if (!Number.isNaN(index) && index >= 0 && index < allDatasets.length) {
+          onDatasetChange(index);
+        }
+      });
+    }
+    if (selectControls) {
+      selectControls.addEventListener('change', function() {
+        const index = parseInt(this.value);
+        if (!Number.isNaN(index) && index >= 0 && index < allDatasets.length) {
+          onDatasetChange(index);
+        }
+      });
+    }
+
     const container = document.getElementById('graph');
     const nodesDataset = new vis.DataSet(allDatasets[0].visNodes);
     const edgesDataset = new vis.DataSet(allDatasets[0].visEdges);
     const data = { nodes: nodesDataset, edges: edgesDataset };
     const options = {
       physics: { enabled: true, barnesHut: { gravitationalConstant: -5000, centralGravity: 0.03, springLength: 150, springConstant: 0.005, avoidOverlap: 0.5, damping: 0.5 }, stabilization: { enabled: true, iterations: 250 }, solver: 'barnesHut' },
-      nodes: { shape: 'dot', font: { size: 12, color: '#333' }, borderWidth: 2 },
+      nodes: { shape: 'dot', font: { size: 12, color: '#333' }, borderWidth: 2, shapeProperties: { borderDashes: false } },
       edges: { width: 1, smooth: { enabled: false }, arrows: { to: { enabled: true, scaleFactor: 0.5 } } },
     };
     const network = new vis.Network(container, data, options);
@@ -2091,8 +2156,7 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
     let currentRecommended = { ...allDatasets[0].recommended, minWeight: 3 };
     let connectionCounts = new Map();
     let shouldFreeze = allDatasets[0].visNodes.length <= 900;
-    let currentEdgeMode = 'thicknessOpacity';
-    const DEFAULT_MIN_MEMBERS = 1;
+    const DEFAULT_MIN_MEMBERS = 3;
 
     function weightDescription(value) {
       const descriptions = {
@@ -2157,7 +2221,7 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       return { min, max, range: Math.max(1e-6, max - min) };
     }
 
-    function encodeEdges(edges, mode) {
+    function encodeEdges(edges) {
       const { min, max, range } = weightStats(edges);
       return edges.map(e => {
         const w = e.weight || 0;
@@ -2167,35 +2231,8 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       let opacity = 0.35 + 0.65 * n;
         let width = 0.5 + 3.5 * n;
         let length = baseLength;
-        let dashes = false;
-
-        if (mode === 'thicknessOpacityLength') {
-          length = baseLength * (1.4 - 0.8 * n);
-        } else if (mode === 'saturation') {
-          const sat = 20 + Math.round(80 * n);
-          color = 'hsl(215, ' + sat + '%, 50%)';
-        opacity = 0.9;
-          width = 1 + 2 * n;
-        } else if (mode === 'lightness') {
-          const light = 80 - Math.round(40 * n);
-          color = 'hsl(215, 70%, ' + light + '%)';
-        opacity = 0.9;
-          width = 1 + 2 * n;
-        } else if (mode === 'dashWeak') {
-          dashes = n < 0.4 ? [6, 6] : false;
-        opacity = 0.5 + 0.5 * n;
-          width = 0.8 + 2.8 * n;
-        }
-
-        return { ...e, color: { color, opacity }, width, length, dashes };
+        return { ...e, color: { color, opacity }, width, length, dashes: false };
       });
-    }
-
-    function setEdgeEncoding(mode) {
-      currentEdgeMode = mode;
-      const updated = encodeEdges(edgesDataset.get(), currentEdgeMode);
-      edgesDataset.clear();
-      edgesDataset.add(updated);
     }
 
     selectEl.addEventListener('change', function() { onDatasetChange(parseInt(this.value, 10)); });
@@ -2306,7 +2343,7 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       nodesDataset.clear();
       edgesDataset.clear();
       nodesDataset.add(nodesWithPositions.filter(n => finalNodeIds.has(n.id)));
-      edgesDataset.add(encodeEdges(filteredEdges, currentEdgeMode));
+      edgesDataset.add(encodeEdges(filteredEdges));
       refreshHeatmapCache();
       updateLabelsForZoom(network.getScale());
     }
@@ -2371,7 +2408,7 @@ const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
       });
 
       edgesDataset.clear();
-      edgesDataset.add(encodeEdges(updatedEdges, currentEdgeMode));
+      edgesDataset.add(encodeEdges(updatedEdges));
       refreshHeatmapCache();
 
       network.setOptions({ physics: { enabled: true } });

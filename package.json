@@ -1,50 +1,50 @@
 {
-  "name": "kairo",
-  "version": "0.1.0",
-  "description": "Salesforce org metadata analyzer - extracts business processes from technical metadata",
-  "type": "module",
-  "main": "dist/index.js",
-  "bin": {
-    "kairo": "./dist/cli.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/cli.ts",
-    "analyze": "tsx src/cli.ts analyze",
-    "analyze:datasets": "tsx src/cli.ts analyze --datasets",
-    "watch": "chokidar \"src/**/*.ts\" -c \"npm run analyze\" --initial",
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "lint": "eslint src/**/*.ts",
-    "format": "prettier --write \"src/**/*.ts\""
-  },
-  "keywords": [
-    "salesforce",
-    "metadata",
-    "analysis",
-    "dependency-graph",
-    "reverse-engineering"
-  ],
-  "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "@types/node": "^22.10.5",
-    "@typescript-eslint/eslint-plugin": "^8.22.1",
-    "@typescript-eslint/parser": "^8.22.1",
-    "chokidar-cli": "^3.0.0",
-    "eslint": "^9.29.0",
-    "playwright": "^1.58.2",
-    "prettier": "^3.5.3",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.3",
-    "vitest": "^4.0.18"
-  },
-  "dependencies": {
-    "commander": "^12.1.0",
-    "fast-xml-parser": "^5.3.4",
-    "graphology": "^0.25.4",
-    "graphology-communities-louvain": "^2.0.2",
-    "graphology-types": "^0.24.7"
-  }
+	"name": "kairo",
+	"version": "0.1.0",
+	"description": "Salesforce org metadata analyzer - extracts business processes from technical metadata",
+	"type": "module",
+	"main": "dist/index.js",
+	"bin": {
+		"kairo": "./dist/cli.js"
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsx src/cli.ts",
+		"analyze": "tsx src/cli.ts analyze",
+		"analyze:datasets": "tsx src/cli.ts analyze --datasets",
+		"watch": "chokidar \"src/**/*.ts\" -c \"npm run analyze\" --initial",
+		"test": "vitest",
+		"test:ui": "vitest --ui",
+		"lint": "eslint src/**/*.ts",
+		"format": "prettier --write \"src/**/*.ts\""
+	},
+	"keywords": [
+		"salesforce",
+		"metadata",
+		"analysis",
+		"dependency-graph",
+		"reverse-engineering"
+	],
+	"author": "",
+	"license": "MIT",
+	"devDependencies": {
+		"@playwright/test": "^1.58.2",
+		"@types/node": "^22.10.5",
+		"@typescript-eslint/eslint-plugin": "^8.22.1",
+		"@typescript-eslint/parser": "^8.22.1",
+		"chokidar-cli": "^3.0.0",
+		"eslint": "^9.29.0",
+		"playwright": "^1.58.2",
+		"prettier": "^3.5.3",
+		"tsx": "^4.19.2",
+		"typescript": "^5.7.3",
+		"vitest": "^4.0.18"
+	},
+	"dependencies": {
+		"commander": "^12.1.0",
+		"fast-xml-parser": "^5.3.4",
+		"graphology": "^0.25.4",
+		"graphology-communities-louvain": "^2.0.2",
+		"graphology-types": "^0.24.7"
+	}
 }
