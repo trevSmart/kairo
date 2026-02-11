@@ -209,12 +209,12 @@ export class SimpleHtmlVisualizer {
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    .type-CustomObject { background: #4CAF50; color: white; }
-    .type-ApexClass { background: #2196F3; color: white; }
-    .type-ApexTrigger { background: #FF9800; color: white; }
+    .type-CustomObject { background: #DA70D6; color: white; }
+    .type-ApexClass { background: #00BCD4; color: white; }
+    .type-ApexTrigger { background: #1565C0; color: white; }
     .type-Flow { background: #9C27B0; color: white; }
-    .type-LightningWebComponent { background: #E91E63; color: white; }
-    .type-AuraComponent { background: #E91E63; color: white; }
+    .type-LightningWebComponent { background: #CDDC39; color: white; }
+    .type-AuraComponent { background: #CDDC39; color: white; }
     .type-Unknown { background: #757575; color: white; }
 
     .component-name {
@@ -291,19 +291,19 @@ export class SimpleHtmlVisualizer {
       font-weight: 600;
     }
     .dep-item.used-by.type-CustomObject {
-      background: #e8f5e9;
-      border-left-color: #4CAF50;
-      color: #1b5e20;
+      background: #f3e5f5;
+      border-left-color: #DA70D6;
+      color: #4a148c;
     }
     .dep-item.used-by.type-ApexClass {
-      background: #e3f2fd;
-      border-left-color: #2196F3;
+      background: #e0f7fa;
+      border-left-color: #00BCD4;
       color: #0d47a1;
     }
     .dep-item.used-by.type-ApexTrigger {
-      background: #fff3e0;
-      border-left-color: #FF9800;
-      color: #e65100;
+      background: #f1f8e9;
+      border-left-color: #1565C0;
+      color: #0d47a1;
     }
     .dep-item.used-by.type-Flow {
       background: #f3e5f5;
@@ -312,9 +312,9 @@ export class SimpleHtmlVisualizer {
     }
     .dep-item.used-by.type-LightningWebComponent,
     .dep-item.used-by.type-AuraComponent {
-      background: #fce4ec;
-      border-left-color: #E91E63;
-      color: #880E4F;
+      background: #f1f8e9;
+      border-left-color: #CDDC39;
+      color: #33691e;
     }
     .dep-item.used-by.type-Unknown {
       background: #f5f5f5;
