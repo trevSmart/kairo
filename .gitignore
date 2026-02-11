@@ -50,3 +50,4 @@ $RECYCLE.BIN/
 **/venv/
 output/dependency-graph.html
 output/index.html
+test-results/.last-run.json

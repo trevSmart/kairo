@@ -2,6 +2,8 @@ import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname } from 'path';
 import type { AnalysisResult, Dependency } from '../types.js';
 import { DependencyWeightCalculator } from '../utils/DependencyWeightCalculator.js';
+import Graph from 'graphology';
+import louvain from 'graphology-communities-louvain';
 
 type NodeInput = { id: string; label: string; type: string; name: string };
 type EdgeInput = { from: string; to: string; label: string; weight: number };
@@ -10,10 +12,12 @@ type VisNode = {
   label: string;
   fullLabel: string;
   title: string;
-  color: string;
+  color?: string | Record<string, unknown>;
   font: { size: number; color: string };
   shape: string;
   size: number;
+  image?: string;
+  heatColor?: string;
   metadata: NodeInput;
 };
 type VisEdge = {
@@ -41,6 +45,35 @@ const COLOR_MAP: Record<string, string> = {
 };
 
 const FIDELITY_PULL = 0.5;
+const STANDARD_OBJECT_ICONS: Record<string, string> = {
+  account: 'account',
+  contact: 'contact',
+  case: 'case',
+  opportunity: 'opportunity',
+  lead: 'lead',
+  campaign: 'campaign',
+  task: 'task',
+  event: 'event',
+  contract: 'contract',
+  asset: 'asset',
+  product: 'product',
+  order: 'order',
+  report: 'report',
+  dashboard: 'dashboard',
+};
+    const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
+
+function stripObjectSuffix(name: string): string {
+  if (!name) return '';
+  const cleaned = name.replace(/__c$/i, '').replace(/__r$/i, '');
+  return cleaned.toLowerCase();
+}
+
+function getStandardIconForNode(node: NodeInput): string | null {
+  if (!node || node.type !== 'CustomObject') return null;
+  const name = stripObjectSuffix(node.label || node.name || node.id || '');
+  return STANDARD_OBJECT_ICONS[name] || null;
+}
 
 type DegreeStats = {
   degree: Map<string, number>;
@@ -82,7 +115,7 @@ function computeRecommendedFilters(edges: EdgeInput[]): { minWeight: number; min
     minWeight = percentile(weights, 0.7);
     filtered = edges.filter(e => (e.weight || 0) >= minWeight);
   }
-  minWeight = clamp(Math.round(minWeight), 0, 10);
+  minWeight = clamp(Math.max(3, Math.round(minWeight)), 0, 10);
 
   const degree = new Map<string, number>();
   for (const e of filtered) {
@@ -157,6 +190,40 @@ function buildVisData(
     connectionCounts.set(e.from, (connectionCounts.get(e.from) || 0) + 1);
     connectionCounts.set(e.to, (connectionCounts.get(e.to) || 0) + 1);
   }
+  const graph = new Graph({ type: 'undirected', allowSelfLoops: true, multi: true });
+  nodes.forEach(node => {
+    if (!graph.hasNode(node.id)) graph.addNode(node.id);
+  });
+  edges.forEach((edge, index) => {
+    const edgeKey = `edge-${index}`;
+    try {
+      if (!graph.hasEdge(edgeKey)) {
+        graph.addEdgeWithKey(edgeKey, edge.from, edge.to, { weight: edge.weight || 1 });
+      }
+    } catch {
+      // ignore duplicate edge keys
+    }
+  });
+  let communityPartition: Record<string, string | number> = {};
+  try {
+    communityPartition = louvain(graph) as unknown as Record<string, string | number>;
+  } catch {
+    communityPartition = {};
+  }
+  const palette = ['#3d5afe', '#ff6ec7', '#1de9b6', '#ffc107', '#ff7043', '#42a5f5', '#9c27b0', '#00bfa5', '#f06292', '#7cb342'];
+  const communityColorLookup = new Map<string, string>();
+  const nodeCommunityColor = new Map<string, string>();
+  Object.entries(communityPartition).forEach(([nodeId, community]) => {
+    const key = String(community);
+    if (!communityColorLookup.has(key)) {
+      const color = palette[communityColorLookup.size % palette.length];
+      communityColorLookup.set(key, color);
+    }
+    const color = communityColorLookup.get(key);
+    if (color) {
+      nodeCommunityColor.set(nodeId, color);
+    }
+  });
   function edgeFidelity(fromId: string, toId: string): number {
     const degFrom = Math.max(1, connectionCounts.get(fromId) || 0);
     const degTo = Math.max(1, connectionCounts.get(toId) || 0);
@@ -180,15 +247,30 @@ function buildVisData(
     const scaleFactor =
       node.type === 'CustomObject' ? Math.min(1 + Math.sqrt(connections) * 0.8, 8) : 1;
     const nodeSize = baseSize * scaleFactor;
+    const iconName = getStandardIconForNode(node);
+    const iconUrl = iconName ? `${ICON_BASE}${iconName}.svg` : undefined;
+    const hasIcon = Boolean(iconUrl);
+    const baseHex = COLOR_MAP[node.type] || '#999';
+    const nodeColor =
+      node.type === 'CustomObject'
+        ? {
+            background: 'rgba(76, 175, 80, 0.35)',
+            border: '#4CAF50',
+            highlight: { background: 'rgba(76, 175, 80, 0.55)', border: '#2e7d32' },
+            hover: { background: 'rgba(76, 175, 80, 0.45)', border: '#388e3c' },
+          }
+        : baseHex;
     return {
       id: node.id,
       label: '',
       fullLabel: node.name,
       title: String(node.label || node.name || node.id || node.type || ''),
-      color: COLOR_MAP[node.type] || '#999',
+      color: nodeColor,
       font: { size: 12, color: '#333' },
-      shape: 'dot',
-      size: nodeSize,
+      shape: hasIcon ? 'image' : 'dot',
+      size: hasIcon ? 42 : nodeSize,
+      image: iconUrl,
+      heatColor: nodeCommunityColor.get(node.id) || baseHex,
       metadata: node,
     };
   });
@@ -389,10 +471,27 @@ export class HtmlVisualizer {
     #info-panel.visible {
       display: block;
     }
+    .info-title-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .info-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .info-icon svg {
+      width: 32px;
+      height: 32px;
+      fill: #0b0f50;
+    }
     .info-title {
       font-weight: bold;
       font-size: 16px;
-      margin-bottom: 10px;
       color: #667eea;
     }
     .info-row {
@@ -446,6 +545,66 @@ export class HtmlVisualizer {
       margin-bottom: 8px;
       display: block;
       font-size: 14px;
+    }
+    .test-set-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .test-set-controls input[type="text"],
+    #test-folder-input {
+      flex: 1 1 auto;
+      min-width: 140px;
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .test-set-controls button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      background: #2c7be5;
+      color: white;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .test-set-list {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .test-set-entry {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: #f7f8fb;
+      border: 1px solid #e0e6f1;
+    }
+    .test-set-entry span {
+      color: #333;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .test-set-entry .test-set-path {
+      flex: 1 1 auto;
+      color: #666;
+    }
+    .test-set-entry button {
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: #ec5252;
+      color: white;
+      font-size: 11px;
+      cursor: pointer;
     }
     .checkbox-group {
       display: flex;
@@ -533,9 +692,7 @@ export class HtmlVisualizer {
     </div>
   </div>
 
-  <div id="graph">
-    <canvas id="heatmap"></canvas>
-  </div>
+  <div id="graph"></div>
 
   <div id="controls">
     <div class="control-section">
@@ -571,19 +728,35 @@ export class HtmlVisualizer {
 
     <div class="control-section">
       <label class="control-label">Min Connections</label>
-      <input type="range" id="min-connections" min="0" max="20" value="${recommended.minConnections}" onchange="filterByConnections(this.value)">
+      <input type="range" id="min-connections" min="0" max="20" value="${recommended.minConnections}" oninput="filterByConnections(this.value)">
       <span id="connections-value">${recommended.minConnections}</span>
     </div>
 
     <div class="control-section">
+      <label class="control-label">Min Island Size</label>
+      <input type="range" id="min-members" min="1" max="50" value="1" oninput="filterByMembers(this.value)">
+      <span id="members-value">1</span>
+    </div>
+
+    <div class="control-section">
       <label class="control-label">Dependency Weight Filter</label>
-      <input type="range" id="min-weight" min="0" max="10" value="${recommended.minWeight}" onchange="filterByWeight(this.value)">
+      <input type="range" id="min-weight" min="0" max="10" value="3" oninput="filterByWeight(this.value)">
       <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
         <span>All</span>
-        <span id="weight-value">${recommended.minWeight}</span>
+        <span id="weight-value">3</span>
         <span>Process Only</span>
       </div>
-      <div style="font-size: 11px; color: #666; margin-top: 4px;" id="weight-description">${describeWeight(recommended.minWeight)}</div>
+      <div style="font-size: 11px; color: #666; margin-top: 4px;" id="weight-description">${describeWeight(3)}</div>
+    </div>
+
+    <div class="control-section">
+      <label class="control-label">Test Sets</label>
+      <div class="test-set-controls">
+        <input type="text" id="test-set-name" placeholder="Alias (optional)">
+        <input type="file" id="test-folder-input" webkitdirectory directory multiple>
+        <button type="button" id="test-set-add">Add test set</button>
+      </div>
+      <div id="test-set-list" class="test-set-list"></div>
     </div>
 
     <div class="control-section">
@@ -631,7 +804,10 @@ export class HtmlVisualizer {
   </div>
 
   <div id="info-panel">
-    <div class="info-title" id="info-name"></div>
+    <div class="info-title-wrapper">
+      <div class="info-icon" id="info-icon"></div>
+      <div class="info-title" id="info-name"></div>
+    </div>
     <div class="info-row"><span class="info-label">Type:</span> <span id="info-type"></span></div>
     <div class="info-row"><span class="info-label">ID:</span> <span id="info-id"></span></div>
     <div class="info-row"><span class="info-label">Dependencies:</span> <span id="info-deps"></span></div>
@@ -676,6 +852,64 @@ export class HtmlVisualizer {
       'LightningWebComponent': '#E91E63',
       'AuraComponent': '#E91E63',
     };
+    const STANDARD_OBJECT_ICONS = {
+      account: 'account',
+      contact: 'contact',
+      case: 'case',
+      opportunity: 'opportunity',
+      lead: 'lead',
+      campaign: 'campaign',
+      task: 'task',
+      event: 'event',
+      contract: 'contract',
+      asset: 'asset',
+      product: 'product',
+      order: 'order',
+      report: 'report',
+      dashboard: 'dashboard'
+    };
+const ICON_BASE = 'https://v1.lightningdesignsystem.com/assets/icons/standard/';
+
+    // Simple connected-component coloring (approximate “islands”)
+    const islandPalette = ['#ff8a80', '#ffd180', '#ffff8d', '#ccff90', '#a7ffeb', '#80d8ff', '#82b1ff', '#b388ff', '#f8bbd0', '#d7ccc8'];
+    const islandColor = new Map();
+    (function computeIslands() {
+      const parent = new Map();
+      function find(x) { if (parent.get(x) === x) return x; const r = find(parent.get(x)); parent.set(x, r); return r; }
+      function unite(a, b) { const ra = find(a); const rb = find(b); if (ra !== rb) parent.set(ra, rb); }
+      nodesData.forEach(n => parent.set(n.id, n.id));
+      edgesData.forEach(e => { if (parent.has(e.from) && parent.has(e.to)) unite(e.from, e.to); });
+      const compIndex = new Map();
+      let idx = 0;
+      nodesData.forEach(n => {
+        const root = find(n.id);
+        if (!compIndex.has(root)) compIndex.set(root, idx++);
+        const color = islandPalette[compIndex.get(root) % islandPalette.length];
+        islandColor.set(n.id, color);
+      });
+    })();
+
+    function stripObjectSuffix(name) {
+      if (!name) return '';
+      const cleaned = name.replace(/__c$/i, '').replace(/__r$/i, '');
+      return cleaned.toLowerCase();
+    }
+
+    function getStandardIconForNode(node) {
+      if (!node || node.type !== 'CustomObject') return null;
+      const name = stripObjectSuffix(node.label || node.name || node.id || '');
+      return STANDARD_OBJECT_ICONS[name] || null;
+    }
+
+    function setInfoIcon(iconName) {
+      const iconNode = document.getElementById('info-icon');
+      if (!iconNode) return;
+      if (!iconName) {
+        iconNode.innerHTML = '';
+        return;
+      }
+      iconNode.innerHTML = '<img src=\"' + ICON_BASE + iconName + '.svg\" alt=\"\" style=\"width:32px;height:32px;\">';
+    }
 
     // Count connections for each node to scale size
     const connectionCounts = new Map();
@@ -690,16 +924,31 @@ export class HtmlVisualizer {
       // Strongly scale CustomObject by relations; Apex/LWC/Aura/Flow fixed size
       const scaleFactor = node.type === 'CustomObject' ? Math.min(1 + (Math.sqrt(connections) * 0.8), 8) : 1;
       const nodeSize = baseSize * scaleFactor;
+      const iconName = getStandardIconForNode(node);
+      const iconUrl = iconName ? ICON_BASE + iconName + '.svg' : null;
+      const hasIcon = Boolean(iconUrl);
 
+      const baseHex = colorMap[node.type] || '#999';
+      const nodeColor =
+        node.type === 'CustomObject'
+          ? {
+              background: 'rgba(76, 175, 80, 0.35)',
+              border: '#4CAF50',
+              highlight: { background: 'rgba(76, 175, 80, 0.55)', border: '#2e7d32' },
+              hover: { background: 'rgba(76, 175, 80, 0.45)', border: '#388e3c' },
+            }
+          : baseHex;
       return {
         id: node.id,
         label: '',
         fullLabel: node.name,
         title: String(node.label || node.name || node.id || node.type || ''),
-        color: colorMap[node.type] || '#999',
+        color: nodeColor,
         font: { size: 12, color: '#333' },
-        shape: 'dot',
-        size: nodeSize,
+        shape: hasIcon ? 'image' : 'dot',
+        size: hasIcon ? 42 : nodeSize,
+        image: iconUrl || undefined,
+        heatColor: islandColor.get(node.id) || baseHex,
         metadata: node,
       };
     });
@@ -833,7 +1082,9 @@ export class HtmlVisualizer {
     const network = new vis.Network(container, data, options);
 
     // Heatmap background (density of nodes) - cheap grid-based rendering
-    const heatmapCanvas = document.getElementById('heatmap');
+    const heatmapCanvas = document.createElement('canvas');
+    heatmapCanvas.id = 'heatmap';
+    container.appendChild(heatmapCanvas);
     const heatmapCtx = heatmapCanvas.getContext('2d');
     let heatmapNodes = nodesDataset.get();
     let heatmapMaxSize = Math.max(1, ...heatmapNodes.map(n => n.size || 1));
@@ -869,7 +1120,7 @@ export class HtmlVisualizer {
 
       const width = heatmapCanvas.width;
       const height = heatmapCanvas.height;
-      const gridSize = 60; // 60x60 grid for performance
+      const gridSize = 90; // finer grid for sharper heat tiles
       const cellW = width / gridSize;
       const cellH = height / gridSize;
       const grid = new Float32Array(gridSize * gridSize);
@@ -917,6 +1168,92 @@ export class HtmlVisualizer {
     network.on('zoom', () => scheduleHeatmap());
     network.on('afterDrawing', () => scheduleHeatmap());
     scheduleHeatmap(true);
+
+    (function() {
+      const TEST_SET_STORAGE_KEY = 'kairo-test-sets';
+      const testSetListEl = document.getElementById('test-set-list');
+      const testSetFolderInput = document.getElementById('test-folder-input');
+      const testSetNameInput = document.getElementById('test-set-name');
+      const testSetAddButton = document.getElementById('test-set-add');
+      let configuredTestSets = loadTestSetsFromStorage();
+
+      function loadTestSetsFromStorage() {
+        try {
+          const stored = localStorage.getItem(TEST_SET_STORAGE_KEY);
+          if (!stored) return [];
+          return JSON.parse(stored);
+        } catch {
+          return [];
+        }
+      }
+
+      function persistTestSets() {
+        try {
+          localStorage.setItem(TEST_SET_STORAGE_KEY, JSON.stringify(configuredTestSets));
+        } catch (err) {
+          console.warn('Could not persist test sets', err);
+        }
+      }
+
+      function summarizePath(raw) {
+        if (!raw) return 'Unknown path';
+        const parts = raw.split('/').filter(Boolean);
+        if (parts.length <= 2) return raw;
+        return parts.slice(0, 2).join('/') + '/…';
+      }
+
+      function renderTestSetList() {
+        if (!testSetListEl) return;
+        if (configuredTestSets.length === 0) {
+          testSetListEl.innerHTML = '<p style="color:#666; font-size:12px;">No test sets configured.</p>';
+          return;
+        }
+        testSetListEl.innerHTML = configuredTestSets
+          .map(function(set, idx) {
+            return (
+              '<div class="test-set-entry">' +
+              '<span>' + set.name + '</span>' +
+              '<span class="test-set-path" title="' + set.path + '">' + summarizePath(set.path) + '</span>' +
+              '<button type="button" data-action="remove-test-set" data-index="' + idx + '">Remove</button>' +
+              '</div>'
+            );
+          })
+          .join('');
+      }
+
+      function handleTestSetAdd() {
+        if (!testSetFolderInput || !testSetFolderInput.files || !testSetFolderInput.files.length) return;
+        const file = testSetFolderInput.files[0];
+        const rawPath = file.path || file.webkitRelativePath || file.name || '';
+        const alias = (testSetNameInput?.value || '').trim();
+        const displayName = alias || summarizePath(rawPath);
+        configuredTestSets.unshift({ name: displayName, path: rawPath });
+        persistTestSets();
+        renderTestSetList();
+        testSetFolderInput.value = '';
+        if (testSetNameInput) testSetNameInput.value = '';
+      }
+
+      function removeTestSet(index) {
+        configuredTestSets.splice(index, 1);
+        persistTestSets();
+        renderTestSetList();
+      }
+
+      testSetAddButton?.addEventListener('click', handleTestSetAdd);
+      testSetFolderInput?.addEventListener('change', handleTestSetAdd);
+      testSetListEl?.addEventListener('click', function(event) {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const button = target.closest('button[data-action="remove-test-set"]');
+        if (!button) return;
+        const idx = Number(button.getAttribute('data-index'));
+        if (Number.isNaN(idx)) return;
+        removeTestSet(idx);
+      });
+      renderTestSetList();
+    })();
+
 
     // Show labels only at high zoom levels to avoid clutter
     const LABEL_ZOOM_THRESHOLD = 2.0;
@@ -970,8 +1307,11 @@ export class HtmlVisualizer {
         document.getElementById('info-type').textContent = node.type;
         document.getElementById('info-id').textContent = node.id;
         document.getElementById('info-deps').textContent = connectedEdges.length;
+        setInfoIcon(getStandardIconForNode(node));
 
         infoPanel.classList.add('visible');
+      } else {
+        setInfoIcon(null);
       }
     });
 
@@ -986,8 +1326,9 @@ export class HtmlVisualizer {
     // Filter functions
     let allNodes = visNodes.slice();
     let allEdges = visEdges.slice();
-    const DEFAULT_MIN_WEIGHT = ${recommended.minWeight};
+    const DEFAULT_MIN_WEIGHT = 3;
     const DEFAULT_MIN_CONNECTIONS = ${recommended.minConnections};
+    const DEFAULT_MIN_MEMBERS = 1;
 
     function weightDescription(value) {
       const descriptions = {
@@ -1020,8 +1361,8 @@ export class HtmlVisualizer {
         const w = e.weight || 0;
         const n = Math.min(1, Math.max(0, (w - min) / range));
         const baseLength = e.baseLength != null ? e.baseLength : e.length;
-        let color = '#3b6ef5';
-        let opacity = 0.15 + 0.85 * n;
+      let color = '#3b6ef5';
+      let opacity = 0.35 + 0.65 * n;
         let width = 0.5 + 3.5 * n;
         let length = baseLength;
         let dashes = false;
@@ -1031,16 +1372,16 @@ export class HtmlVisualizer {
         } else if (mode === 'saturation') {
           const sat = 20 + Math.round(80 * n);
           color = 'hsl(215, ' + sat + '%, 50%)';
-          opacity = 0.9;
+        opacity = 0.9;
           width = 1 + 2 * n;
         } else if (mode === 'lightness') {
           const light = 80 - Math.round(40 * n);
           color = 'hsl(215, 70%, ' + light + '%)';
-          opacity = 0.9;
+        opacity = 0.9;
           width = 1 + 2 * n;
         } else if (mode === 'dashWeak') {
           dashes = n < 0.4 ? [6, 6] : false;
-          opacity = 0.4 + 0.6 * n;
+        opacity = 0.5 + 0.5 * n;
           width = 0.8 + 2.8 * n;
         }
 
@@ -1056,6 +1397,41 @@ export class HtmlVisualizer {
       edgesDataset.add(updated);
     }
 
+    function pruneSmallComponents(nodesArr, edgesArr, minMembers) {
+      if (minMembers <= 1) return { nodes: nodesArr, edges: edgesArr };
+      const adj = new Map();
+      nodesArr.forEach(n => adj.set(n.id, new Set()));
+      edgesArr.forEach(e => {
+        if (adj.has(e.from) && adj.has(e.to)) {
+          adj.get(e.from).add(e.to);
+          adj.get(e.to).add(e.from);
+        }
+      });
+      const visited = new Set();
+      const keep = new Set();
+      nodesArr.forEach(n => {
+        if (visited.has(n.id)) return;
+        const stack = [n.id];
+        const comp = [];
+        visited.add(n.id);
+        while (stack.length) {
+          const v = stack.pop();
+          comp.push(v);
+          adj.get(v)?.forEach(nb => {
+            if (!visited.has(nb)) {
+              visited.add(nb);
+              stack.push(nb);
+            }
+          });
+        }
+        if (comp.length >= minMembers) comp.forEach(id => keep.add(id));
+      });
+      const prunedNodes = nodesArr.filter(n => keep.has(n.id));
+      const prunedIds = new Set(prunedNodes.map(n => n.id));
+      const prunedEdges = edgesArr.filter(e => prunedIds.has(e.from) && prunedIds.has(e.to));
+      return { nodes: prunedNodes, edges: prunedEdges };
+    }
+
     function applyFilters() {
       const checkboxes = document.querySelectorAll('#controls input[type="checkbox"]');
       const selectedTypes = Array.from(checkboxes)
@@ -1064,6 +1440,7 @@ export class HtmlVisualizer {
 
       const minConn = parseInt(document.getElementById('min-connections').value, 10) || 0;
       const minWeight = parseInt(document.getElementById('min-weight').value, 10) || 0;
+      const minMembers = parseInt(document.getElementById('min-members').value, 10) || 1;
 
       const typeFilteredNodes = allNodes.filter(node => selectedTypes.includes(node.metadata.type));
       const typeNodeIds = new Set(typeFilteredNodes.map(n => n.id));
@@ -1080,8 +1457,10 @@ export class HtmlVisualizer {
       const filteredNodes = typeFilteredNodes.filter(node =>
         (connectionCounts.get(node.id) || 0) >= minConn
       );
-      const finalNodeIds = new Set(filteredNodes.map(n => n.id));
-      filteredEdges = filteredEdges.filter(edge => finalNodeIds.has(edge.from) && finalNodeIds.has(edge.to));
+
+      const connected = pruneSmallComponents(filteredNodes, filteredEdges, minMembers);
+      const finalNodeIds = new Set(connected.nodes.map(n => n.id));
+      filteredEdges = connected.edges.filter(edge => finalNodeIds.has(edge.from) && finalNodeIds.has(edge.to));
 
       const positions = network.getPositions();
       const nodesWithPositions = filteredNodes.map(node => ({
@@ -1093,7 +1472,7 @@ export class HtmlVisualizer {
 
       nodesDataset.clear();
       edgesDataset.clear();
-      nodesDataset.add(nodesWithPositions);
+      nodesDataset.add(nodesWithPositions.filter(n => finalNodeIds.has(n.id)));
       edgesDataset.add(encodeEdges(filteredEdges, currentEdgeMode));
       refreshHeatmapCache();
       updateLabelsForZoom(network.getScale());
@@ -1105,6 +1484,11 @@ export class HtmlVisualizer {
 
     function filterByConnections(minConnections) {
       document.getElementById('connections-value').textContent = minConnections;
+      applyFilters();
+    }
+
+    function filterByMembers(minMembers) {
+      document.getElementById('members-value').textContent = minMembers;
       applyFilters();
     }
 
@@ -1129,6 +1513,8 @@ export class HtmlVisualizer {
 
       document.getElementById('min-connections').value = DEFAULT_MIN_CONNECTIONS;
       document.getElementById('connections-value').textContent = DEFAULT_MIN_CONNECTIONS;
+      document.getElementById('min-members').value = DEFAULT_MIN_MEMBERS;
+      document.getElementById('members-value').textContent = DEFAULT_MIN_MEMBERS;
 
       applyFilters();
       network.fit();
@@ -1145,6 +1531,9 @@ export class HtmlVisualizer {
       const minConnEl = document.getElementById('min-connections');
       if (minConnEl) minConnEl.value = DEFAULT_MIN_CONNECTIONS;
       document.getElementById('connections-value').textContent = DEFAULT_MIN_CONNECTIONS;
+      const minMembersEl = document.getElementById('min-members');
+      if (minMembersEl) minMembersEl.value = DEFAULT_MIN_MEMBERS;
+      document.getElementById('members-value').textContent = DEFAULT_MIN_MEMBERS;
       const minWeightEl = document.getElementById('min-weight');
       if (minWeightEl) minWeightEl.value = DEFAULT_MIN_WEIGHT;
       filterByWeight(DEFAULT_MIN_WEIGHT);
@@ -1155,8 +1544,10 @@ export class HtmlVisualizer {
 
     // Search functionality
     const searchInput = document.getElementById('search-input');
-    searchInput.addEventListener('input', function(e) {
-      const searchTerm = e.target.value.toLowerCase();
+    searchInput?.addEventListener('input', function(e) {
+      const target = e.currentTarget;
+      const value = (target && target.value) || '';
+      const searchTerm = value.toLowerCase();
       if (searchTerm.length < 2) {
         resetView();
         return;
@@ -1320,6 +1711,9 @@ export class HtmlVisualizer {
     button:hover { background: #5568d3; }
     #info-panel { position: absolute; top: 100px; right: 20px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); max-width: 300px; display: none; }
     #info-panel.visible { display: block; }
+    .info-title-wrapper { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .info-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+    .info-icon svg { width: 32px; height: 32px; fill: #0b0f50; }
     .info-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #667eea; }
     .info-row { margin: 5px 0; font-size: 14px; }
     .legend { position: absolute; bottom: 20px; right: 20px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
@@ -1358,9 +1752,7 @@ export class HtmlVisualizer {
       <div class="stat"><span>Apex:</span><span class="stat-value" id="stat-apex">${(first.stats.componentsByType.ApexClass || 0) + (first.stats.componentsByType.ApexTrigger || 0)}</span></div>
     </div>
   </div>
-  <div id="graph">
-    <canvas id="heatmap"></canvas>
-  </div>
+  <div id="graph"></div>
   <div id="controls">
     <div class="control-section">
       <label class="control-label">Dataset</label>
@@ -1399,19 +1791,35 @@ export class HtmlVisualizer {
 
     <div class="control-section">
       <label class="control-label">Min Connections</label>
-      <input type="range" id="min-connections" min="0" max="20" value="${first.recommended.minConnections}" onchange="filterByConnections(this.value)">
+      <input type="range" id="min-connections" min="0" max="20" value="${first.recommended.minConnections}" oninput="filterByConnections(this.value)">
       <span id="connections-value">${first.recommended.minConnections}</span>
     </div>
 
     <div class="control-section">
+      <label class="control-label">Min Island Size</label>
+      <input type="range" id="min-members" min="1" max="50" value="1" oninput="filterByMembers(this.value)">
+      <span id="members-value">1</span>
+    </div>
+
+    <div class="control-section">
       <label class="control-label">Dependency Weight Filter</label>
-      <input type="range" id="min-weight" min="0" max="10" value="${first.recommended.minWeight}" onchange="filterByWeight(this.value)">
+      <input type="range" id="min-weight" min="0" max="10" value="3" oninput="filterByWeight(this.value)">
       <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
         <span>All</span>
-        <span id="weight-value">${first.recommended.minWeight}</span>
+        <span id="weight-value">3</span>
         <span>Process Only</span>
       </div>
-      <div style="font-size: 11px; color: #666; margin-top: 4px;" id="weight-description">${describeWeight(first.recommended.minWeight)}</div>
+      <div style="font-size: 11px; color: #666; margin-top: 4px;" id="weight-description">${describeWeight(3)}</div>
+    </div>
+
+    <div class="control-section">
+      <label class="control-label">Test Sets</label>
+      <div class="test-set-controls">
+        <input type="text" id="test-set-name" placeholder="Alias (optional)">
+        <input type="file" id="test-folder-input" webkitdirectory directory multiple>
+        <button type="button" id="test-set-add">Add test set</button>
+      </div>
+      <div id="test-set-list" class="test-set-list"></div>
     </div>
 
     <div class="control-section">
@@ -1459,7 +1867,10 @@ export class HtmlVisualizer {
   </div>
 
   <div id="info-panel">
-    <div class="info-title" id="info-name"></div>
+    <div class="info-title-wrapper">
+      <div class="info-icon" id="info-icon"></div>
+      <div class="info-title" id="info-name"></div>
+    </div>
     <div class="info-row"><span class="info-label">Type:</span> <span id="info-type"></span></div>
     <div class="info-row"><span class="info-label">ID:</span> <span id="info-id"></span></div>
     <div class="info-row"><span class="info-label">Dependencies:</span> <span id="info-deps"></span></div>
@@ -1495,6 +1906,45 @@ export class HtmlVisualizer {
   <script>
     const allDatasets = ${datasetsJson};
     const colorMap = ${colorMapJson};
+    const STANDARD_OBJECT_ICONS = {
+      account: 'account',
+      contact: 'contact',
+      case: 'case',
+      opportunity: 'opportunity',
+      lead: 'lead',
+      campaign: 'campaign',
+      task: 'task',
+      event: 'event',
+      contract: 'contract',
+      asset: 'asset',
+      product: 'product',
+      order: 'order',
+      report: 'report',
+      dashboard: 'dashboard'
+    };
+    const ICON_BASE = 'https://www.lightningdesignsystem.com/assets/icons/standard/';
+
+    function stripObjectSuffix(name) {
+      if (!name) return '';
+      const cleaned = name.replace(/__c$/i, '').replace(/__r$/i, '');
+      return cleaned.toLowerCase();
+    }
+
+    function getStandardIconForNode(node) {
+      if (!node || node.type !== 'CustomObject') return null;
+      const name = stripObjectSuffix(node.label || node.name || node.id || '');
+      return STANDARD_OBJECT_ICONS[name] || null;
+    }
+
+    function setInfoIcon(iconName) {
+      const iconNode = document.getElementById('info-icon');
+      if (!iconNode) return;
+      if (!iconName) {
+        iconNode.innerHTML = '';
+        return;
+      }
+      iconNode.innerHTML = '<img src=\"' + ICON_BASE + iconName + '.svg\" alt=\"\" style=\"width:32px;height:32px;\">';
+    }
 
     function populateDatasetSelects() {
       const selectHeader = document.getElementById('dataset-select');
@@ -1531,7 +1981,9 @@ export class HtmlVisualizer {
     const network = new vis.Network(container, data, options);
 
     // Heatmap background (density of nodes) - cheap grid-based rendering
-    const heatmapCanvas = document.getElementById('heatmap');
+    const heatmapCanvas = document.createElement('canvas');
+    heatmapCanvas.id = 'heatmap';
+    container.appendChild(heatmapCanvas);
     const heatmapCtx = heatmapCanvas.getContext('2d');
     let heatmapNodes = nodesDataset.get();
     let heatmapMaxSize = Math.max(1, ...heatmapNodes.map(n => n.size || 1));
@@ -1567,7 +2019,7 @@ export class HtmlVisualizer {
 
       const width = heatmapCanvas.width;
       const height = heatmapCanvas.height;
-      const gridSize = 60; // 60x60 grid for performance
+      const gridSize = 90; // finer grid for sharper heat tiles
       const cellW = width / gridSize;
       const cellH = height / gridSize;
       const grid = new Float32Array(gridSize * gridSize);
@@ -1636,10 +2088,11 @@ export class HtmlVisualizer {
     let currentNodes = allDatasets[0].nodes;
     let allNodes = allDatasets[0].visNodes.slice();
     let allEdges = allDatasets[0].visEdges.slice();
-    let currentRecommended = allDatasets[0].recommended;
+    let currentRecommended = { ...allDatasets[0].recommended, minWeight: 3 };
     let connectionCounts = new Map();
     let shouldFreeze = allDatasets[0].visNodes.length <= 900;
     let currentEdgeMode = 'thicknessOpacity';
+    const DEFAULT_MIN_MEMBERS = 1;
 
     function weightDescription(value) {
       const descriptions = {
@@ -1710,8 +2163,8 @@ export class HtmlVisualizer {
         const w = e.weight || 0;
         const n = Math.min(1, Math.max(0, (w - min) / range));
         const baseLength = e.baseLength != null ? e.baseLength : e.length;
-        let color = '#3b6ef5';
-        let opacity = 0.15 + 0.85 * n;
+      let color = '#3b6ef5';
+      let opacity = 0.35 + 0.65 * n;
         let width = 0.5 + 3.5 * n;
         let length = baseLength;
         let dashes = false;
@@ -1721,16 +2174,16 @@ export class HtmlVisualizer {
         } else if (mode === 'saturation') {
           const sat = 20 + Math.round(80 * n);
           color = 'hsl(215, ' + sat + '%, 50%)';
-          opacity = 0.9;
+        opacity = 0.9;
           width = 1 + 2 * n;
         } else if (mode === 'lightness') {
           const light = 80 - Math.round(40 * n);
           color = 'hsl(215, 70%, ' + light + '%)';
-          opacity = 0.9;
+        opacity = 0.9;
           width = 1 + 2 * n;
         } else if (mode === 'dashWeak') {
           dashes = n < 0.4 ? [6, 6] : false;
-          opacity = 0.4 + 0.6 * n;
+        opacity = 0.5 + 0.5 * n;
           width = 0.8 + 2.8 * n;
         }
 
@@ -1770,12 +2223,49 @@ export class HtmlVisualizer {
           document.getElementById('info-type').textContent = node.type;
           document.getElementById('info-id').textContent = node.id;
           document.getElementById('info-deps').textContent = connectedEdges.length;
+          setInfoIcon(getStandardIconForNode(node));
           infoPanel.classList.add('visible');
         }
       } else {
         infoPanel.classList.remove('visible');
+        setInfoIcon(null);
       }
     });
+
+    function pruneSmallComponents(nodesArr, edgesArr, minMembers) {
+      if (minMembers <= 1) return { nodes: nodesArr, edges: edgesArr };
+      const adj = new Map();
+      nodesArr.forEach(n => adj.set(n.id, new Set()));
+      edgesArr.forEach(e => {
+        if (adj.has(e.from) && adj.has(e.to)) {
+          adj.get(e.from).add(e.to);
+          adj.get(e.to).add(e.from);
+        }
+      });
+      const visited = new Set();
+      const keep = new Set();
+      nodesArr.forEach(n => {
+        if (visited.has(n.id)) return;
+        const stack = [n.id];
+        const comp = [];
+        visited.add(n.id);
+        while (stack.length) {
+          const v = stack.pop();
+          comp.push(v);
+          adj.get(v)?.forEach(nb => {
+            if (!visited.has(nb)) {
+              visited.add(nb);
+              stack.push(nb);
+            }
+          });
+        }
+        if (comp.length >= minMembers) comp.forEach(id => keep.add(id));
+      });
+      const prunedNodes = nodesArr.filter(n => keep.has(n.id));
+      const prunedIds = new Set(prunedNodes.map(n => n.id));
+      const prunedEdges = edgesArr.filter(e => prunedIds.has(e.from) && prunedIds.has(e.to));
+      return { nodes: prunedNodes, edges: prunedEdges };
+    }
 
     function applyFilters() {
       const checkboxes = document.querySelectorAll('#controls input[type=\"checkbox\"]');
@@ -1785,6 +2275,7 @@ export class HtmlVisualizer {
 
       const minConn = parseInt(document.getElementById('min-connections').value, 10) || 0;
       const minWeight = parseInt(document.getElementById('min-weight').value, 10) || 0;
+      const minMembers = parseInt(document.getElementById('min-members').value, 10) || 1;
 
       const typeFilteredNodes = allNodes.filter(node => selectedTypes.includes(node.metadata.type));
       const typeNodeIds = new Set(typeFilteredNodes.map(n => n.id));
@@ -1799,8 +2290,10 @@ export class HtmlVisualizer {
       });
 
       const filteredNodes = typeFilteredNodes.filter(node => (connectionCounts.get(node.id) || 0) >= minConn);
-      const finalNodeIds = new Set(filteredNodes.map(n => n.id));
-      filteredEdges = filteredEdges.filter(edge => finalNodeIds.has(edge.from) && finalNodeIds.has(edge.to));
+
+      const connected = pruneSmallComponents(filteredNodes, filteredEdges, minMembers);
+      const finalNodeIds = new Set(connected.nodes.map(n => n.id));
+      filteredEdges = connected.edges.filter(edge => finalNodeIds.has(edge.from) && finalNodeIds.has(edge.to));
 
       const positions = network.getPositions();
       const nodesWithPositions = filteredNodes.map(node => ({
@@ -1812,7 +2305,7 @@ export class HtmlVisualizer {
 
       nodesDataset.clear();
       edgesDataset.clear();
-      nodesDataset.add(nodesWithPositions);
+      nodesDataset.add(nodesWithPositions.filter(n => finalNodeIds.has(n.id)));
       edgesDataset.add(encodeEdges(filteredEdges, currentEdgeMode));
       refreshHeatmapCache();
       updateLabelsForZoom(network.getScale());
@@ -1824,6 +2317,11 @@ export class HtmlVisualizer {
 
     function filterByConnections(val) {
       document.getElementById('connections-value').textContent = val;
+      applyFilters();
+    }
+
+    function filterByMembers(val) {
+      document.getElementById('members-value').textContent = val;
       applyFilters();
     }
 
@@ -1840,6 +2338,9 @@ export class HtmlVisualizer {
       if (minConnEl) minConnEl.value = currentRecommended.minConnections;
       if (minWeightEl) minWeightEl.value = currentRecommended.minWeight;
       document.getElementById('connections-value').textContent = currentRecommended.minConnections;
+      const minMembersEl = document.getElementById('min-members');
+      if (minMembersEl) minMembersEl.value = DEFAULT_MIN_MEMBERS;
+      document.getElementById('members-value').textContent = DEFAULT_MIN_MEMBERS;
       filterByWeight(currentRecommended.minWeight);
     }
 
@@ -1911,8 +2412,9 @@ export class HtmlVisualizer {
     // Apply default filters on initial load
     resetView();
 
-    document.getElementById('search-input').addEventListener('input', function(e) {
-      const term = e.target.value.toLowerCase();
+    document.getElementById('search-input')?.addEventListener('input', function(e) {
+      const target = e.currentTarget;
+      const term = ((target && target.value) || '').toLowerCase();
       if (term.length < 2) { resetView(); return; }
       const filtered = allNodes.filter(n => (n.metadata.name && n.metadata.name.toLowerCase().includes(term)) || (n.title && n.title.toLowerCase().includes(term)));
       const ids = new Set(filtered.map(n => n.id));

@@ -28,6 +28,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^22.10.5",
     "@typescript-eslint/eslint-plugin": "^8.22.1",
     "@typescript-eslint/parser": "^8.22.1",
@@ -43,6 +44,7 @@
     "commander": "^12.1.0",
     "fast-xml-parser": "^5.3.4",
     "graphology": "^0.25.4",
+    "graphology-communities-louvain": "^2.0.2",
     "graphology-types": "^0.24.7"
   }
 }
