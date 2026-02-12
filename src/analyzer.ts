@@ -6,6 +6,9 @@ import { LWCParser } from './parsers/LWCParser.js';
 import { AuraParser } from './parsers/AuraParser.js';
 import { GraphBuilder } from './graph/GraphBuilder.js';
 import type { AnalysisResult, MetadataType } from './types.js';
+import type { MetadataIndexes } from './parsers/MetadataScanner.js';
+
+const STANDARD_OBJECTS = ['Account', 'Contact', 'Opportunity', 'Case', 'Lead'];
 
 export class MetadataAnalyzer {
   private scanner = new MetadataScanner();
@@ -13,9 +16,6 @@ export class MetadataAnalyzer {
   private apexParser = new ApexParser();
   private lwcParser = new LWCParser();
   private auraParser = new AuraParser();
-  private objectNameMap = new Map<string, string>();
-  private standardObjects = new Set(['Account', 'Contact', 'Opportunity', 'Case', 'Lead']);
-  private apexClassSet = new Set<string>();
 
   private isTestClass(filePath: string): boolean {
     try {
@@ -26,46 +26,42 @@ export class MetadataAnalyzer {
     }
   }
 
-  async analyze(sourceDir: string): Promise<AnalysisResult> {
+  async analyze(
+    sourceDir: string,
+    onProgress?: (processed: number, total: number) => void | Promise<void>
+  ): Promise<AnalysisResult> {
     console.log(`🔍 Scanning metadata in: ${sourceDir}`);
 
-    const files = this.scanner.scan(sourceDir);
+    const { files, indexes } = this.scanner.scanWithIndexes(sourceDir);
+    const objectNameMap = this.buildObjectNameMap(indexes);
     console.log(`📦 Found ${files.length} metadata files`);
 
     const graphBuilder = new GraphBuilder();
     let processed = 0;
-
-    for (const obj of this.standardObjects) {
-      this.objectNameMap.set(obj.toLowerCase(), obj);
-    }
+    await (onProgress?.(0, files.length) ?? Promise.resolve());
 
     const resolveObjectName = (name: string): string => {
       const key = name.toLowerCase();
-      const existing = this.objectNameMap.get(key);
+      const existing = objectNameMap.get(key);
       if (existing) return existing;
-      this.objectNameMap.set(key, name);
+      objectNameMap.set(key, name);
       return name;
     };
-    const isObjectName = (name: string): boolean => {
-      if (this.objectNameMap.has(name.toLowerCase())) return true;
-      return /__(c|mdt|x|kav)$/i.test(name);
-    };
-    const isApexClass = (name: string): boolean => this.apexClassSet.has(name);
 
-    // Pre-index Apex classes by filename (case-sensitive)
-    for (const file of files) {
-      if (file.type === 'ApexClass') {
-        const fileName = file.path.split('/').pop()!;
-        const name = fileName.replace(/\.cls$/, '');
-        this.apexClassSet.add(name);
-      }
-    }
+    const isObjectName = (name: string): boolean => {
+      if (indexes.fieldNames.has(name)) return false;
+      return objectNameMap.has(name.toLowerCase());
+    };
+
+    const isFieldName = (name: string): boolean => indexes.fieldNames.has(name);
+    const isApexClass = (name: string): boolean => indexes.apexClassNames.has(name);
+    const isKnownObject = (name: string): boolean => objectNameMap.has(name.toLowerCase());
 
     for (const file of files) {
       try {
         if (file.type === 'CustomObject') {
           const { component, dependencies } = this.objectParser.parse(file.path);
-          this.objectNameMap.set(component.name.toLowerCase(), component.name);
+          objectNameMap.set(component.name.toLowerCase(), component.name);
           graphBuilder.addComponent(component);
           dependencies.forEach(dep => graphBuilder.addDependency(dep));
         } else if (file.type === 'ApexClass') {
@@ -75,12 +71,22 @@ export class MetadataAnalyzer {
             'ApexClass',
             resolveObjectName,
             isObjectName,
-            isApexClass
+            isApexClass,
+            isFieldName,
+            isKnownObject
           );
           graphBuilder.addComponent(component);
           dependencies.forEach(dep => graphBuilder.addDependency(dep));
         } else if (file.type === 'ApexTrigger') {
-          const { component, dependencies } = this.apexParser.parse(file.path, 'ApexTrigger', resolveObjectName, isObjectName, isApexClass);
+          const { component, dependencies } = this.apexParser.parse(
+            file.path,
+            'ApexTrigger',
+            resolveObjectName,
+            isObjectName,
+            isApexClass,
+            isFieldName,
+            isKnownObject
+          );
           graphBuilder.addComponent(component);
           dependencies.forEach(dep => graphBuilder.addDependency(dep));
         } else if (file.type === 'LWC') {
@@ -107,11 +113,23 @@ export class MetadataAnalyzer {
           });
           const auraDeps = this.auraParser.parse(file.path, componentId, isApexClass);
           auraDeps.forEach(dep => graphBuilder.addDependency(dep));
+        } else if (file.type === 'Flow') {
+          const fileName = file.path.split('/').pop()!;
+          const flowName = fileName.replace(/\.flow-meta\.xml$/, '');
+          graphBuilder.addComponent({
+            id: `Flow:${flowName}`,
+            name: flowName,
+            type: 'Flow',
+            filePath: file.path,
+          });
         }
 
         processed++;
         if (processed % 100 === 0) {
           console.log(`  ⚙️  Processed ${processed}/${files.length} files...`);
+        }
+        if (onProgress && (processed % 10 === 0 || processed === files.length)) {
+          await (onProgress(processed, files.length) ?? Promise.resolve());
         }
       } catch (error) {
         console.warn(`  ⚠️  Failed to parse ${file.path}: ${error}`);
@@ -122,7 +140,6 @@ export class MetadataAnalyzer {
 
     const graph = graphBuilder.build();
 
-    // Calculate stats
     const componentsByType: Record<string, number> = {};
     graph.components.forEach(comp => {
       componentsByType[comp.type] = (componentsByType[comp.type] || 0) + 1;
@@ -136,5 +153,16 @@ export class MetadataAnalyzer {
         totalDependencies: graph.dependencies.length,
       },
     };
+  }
+
+  private buildObjectNameMap(indexes: MetadataIndexes): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const obj of STANDARD_OBJECTS) {
+      map.set(obj.toLowerCase(), obj);
+    }
+    for (const name of indexes.objectNames) {
+      map.set(name.toLowerCase(), name);
+    }
+    return map;
   }
 }

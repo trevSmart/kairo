@@ -1,0 +1,14 @@
+{
+  "projects": [
+    {
+      "id": "kairo",
+      "name": "Kairo test-data",
+      "source": "/Users/marcpla/Documents/Projectes/Vodafone/force-app/main/default"
+    },
+    {
+      "id": "caixabank",
+      "name": "CaixaBank force-app",
+      "source": "/Users/marcpla/Documents/Projectes/CaixaBank/force-app/main/default"
+    }
+  ]
+}

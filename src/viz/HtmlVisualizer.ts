@@ -43,8 +43,8 @@ const COLOR_MAP: Record<string, string> = {
   ApexClass: '#00BCD4',
   ApexTrigger: '#1565C0',
   Flow: '#9C27B0',
-  LightningWebComponent: '#66BB6A',
-  AuraComponent: '#2E7D32',
+  LightningWebComponent: '#FF9800',
+  AuraComponent: '#E65100',
 };
 
 const FIDELITY_PULL = 0.5;
@@ -159,7 +159,7 @@ function tuneWeight(dep: Dependency, stats: DegreeStats): number {
   const toType = dep.to.split(':')[0] || 'Unknown';
   const source = (dep.metadata as Record<string, unknown> | undefined)?.source as string | undefined;
 
-  // Down-weight low-signal edges (observed majority in dataset)
+  // Down-weight low-signal edges (observed majority in project)
   if (source === 'type_reference') w *= 0.35; // Very noisy
   if (source === 'soql') w *= 0.6; // Data reads: weaker signal
   if (source === 'dml') w = Math.max(w, 7.5); // Data mutation: process signal
@@ -172,7 +172,7 @@ function tuneWeight(dep: Dependency, stats: DegreeStats): number {
     w = Math.max(w, 9);
   }
 
-  // Penalize hub targets for low/medium signal edges (based on dataset degree distribution)
+  // Penalize hub targets for low/medium signal edges (based on project degree distribution)
   const targetDeg = stats.degree.get(dep.to) || 1;
   if (w < 7) {
     const idf = Math.log(1 + stats.nodeCount / targetDeg) / Math.log(1 + stats.nodeCount / stats.median);
@@ -345,7 +345,7 @@ export class HtmlVisualizer {
       const fromType = edge.from.split(':')[0];
       const toType = edge.to.split(':')[0];
 
-      // Non-linear boost for multiple references (rare in this dataset but improves signal)
+      // Non-linear boost for multiple references (rare in this project but improves signal)
       const countBoost = Math.log1p(edge.count) * 0.7;
       let finalWeight = Math.min(10, edge.maxWeight + countBoost);
 
@@ -363,6 +363,32 @@ export class HtmlVisualizer {
       };
     });
     return { nodes, edges };
+  }
+
+  /** Generate full graph view HTML for a single Salesforce project (for server use). */
+  generateHtmlForProject(result: AnalysisResult, id: string, name: string): string {
+    const payload = this.buildGraphPayload(result, id, name);
+    return this.generateHtml([payload]);
+  }
+
+  /** Build graph payload for a single Salesforce project (for API use). */
+  buildGraphPayload(
+    result: AnalysisResult,
+    id: string,
+    name: string
+  ): {
+    id: string;
+    name: string;
+    stats: AnalysisResult['stats'];
+    nodes: NodeInput[];
+    visNodes: VisNode[];
+    visEdges: VisEdge[];
+    recommended: { minWeight: number; minConnections: number };
+  } {
+    const { nodes, edges } = this.buildNodesAndEdges(result);
+    const { visNodes, visEdges } = buildVisData(nodes, edges);
+    const recommended = computeRecommendedFilters(edges);
+    return { id, name, stats: result.stats, nodes, visNodes, visEdges, recommended };
   }
 
   generate(
@@ -398,7 +424,7 @@ export class HtmlVisualizer {
     const first = payloads[0];
     const stats = first?.stats ?? defaultStats;
     const recommended = first?.recommended ?? defaultRecommended;
-    const datasetsJson = JSON.stringify(
+    const projectsJson = JSON.stringify(
       payloads.map(p => ({
         id: p.id,
         name: p.name,
@@ -414,20 +440,23 @@ export class HtmlVisualizer {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Kairo - Multi-dataset dependency graph</title>
+  <title>Kairo - Dependency graph</title>
   <script src="https://unpkg.com/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
     #header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-    .header-row-one { display: flex; align-items: center; gap: 0; }
+    #header .back-link { color: white; text-decoration: none; opacity: 0.95; margin-right: 20px; font-size: 15px; font-weight: 600; padding: 6px 12px; background: rgba(255,255,255,0.15); border-radius: 8px; white-space: nowrap; flex-shrink: 0; }
+    #header .back-link:hover { opacity: 1; background: rgba(255,255,255,0.25); }
+    .header-row-one { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
     #header h1 { margin: 0; font-size: 24px; display: none; }
-    .dataset-switcher { display: flex; align-items: center; gap: 0; }
-    .dataset-switcher label { display: none; }
-    .dataset-switcher select { padding: 0; border-radius: 0; font-size: 18px; cursor: pointer; background: transparent; color: white; border: none; font-weight: 600; min-width: auto; appearance: none; -webkit-appearance: none; -moz-appearance: none; background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 2px center; background-size: 18px; padding-right: 24px; }
-    .dataset-switcher select:hover { opacity: 0.9; }
+    .project-switcher { display: flex; align-items: center; gap: 0; }
+    .project-switcher label { display: none; }
+    .project-switcher select { padding: 0; border-radius: 0; font-size: 18px; cursor: pointer; background: transparent; color: white; border: none; font-weight: 600; min-width: auto; appearance: none; -webkit-appearance: none; -moz-appearance: none; background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 2px center; background-size: 18px; padding-right: 24px; }
+    .project-switcher select:hover { opacity: 0.9; }
     #stats { display: flex; gap: 20px; font-size: 13px; opacity: 0.9; flex-wrap: wrap; align-items: center; }
     .stat { display: flex; align-items: center; gap: 6px; }
     .stat-value { font-size: 20px; font-weight: bold; }
+    #graph-wrapper { position: relative; flex: 1; min-height: 0; display: flex; }
     #graph { flex: 1; background: #000; position: relative; min-height: 0; transform: translateZ(0); }
     #heatmap {
       position: absolute;
@@ -440,6 +469,8 @@ export class HtmlVisualizer {
       z-index: 2;
     }
     .empty-state { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.95); font-size: 18px; color: #999; text-align: center; padding: 40px; }
+    .stabilization-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); font-size: 18px; color: #ccc; text-align: center; z-index: 100; transition: opacity 0.3s ease; }
+    .stabilization-overlay.hidden { opacity: 0; pointer-events: none; }
     #controls { position: absolute; top: 100px; left: 20px; background: rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 0px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 280px; max-height: calc(100vh - 130px); overflow-y: auto; touch-action: none; user-select: none; z-index: 1000; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
     #controls-header { background: linear-gradient(135deg, #667eea 0%, #5568d3 100%); color: white; padding: 10px; border-radius: 8px 8px 0 0; cursor: move; font-weight: 600; font-size: 13px; display: flex; justify-content: space-between; align-items: center; touch-action: none; }
     #controls-content { padding: 10px; overflow-y: auto; max-height: calc(100vh - 160px); }
@@ -587,7 +618,7 @@ export class HtmlVisualizer {
     .legend-content { padding: 15px; }
     .legend-title { font-weight: bold; margin-bottom: 10px; color: #ffffff; }
     .legend-item { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 12px; color: #ffffff; }
-    .legend-color { width: 16px; height: 16px; border-radius: 50%; }
+    .legend-color { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     div.vis-tooltip {
       position: absolute;
       visibility: hidden;
@@ -607,8 +638,9 @@ export class HtmlVisualizer {
 <body>
   <div id="header">
     <div class="header-row-one">
-      <div class="dataset-switcher">
-        <select id="dataset-select" title="Tria el dataset a visualitzar"></select>
+      <a href="./" class="back-link" title="Tornar a la homepage">← Tornar</a>
+      <div class="project-switcher">
+        <select id="project-select" title="Tria el projecte Salesforce a visualitzar"></select>
       </div>
     </div>
     <div id="stats">
@@ -618,9 +650,13 @@ export class HtmlVisualizer {
       <div class="stat"><span>Apex:</span><span class="stat-value" id="stat-apex">${(stats.componentsByType?.ApexClass || 0) + (stats.componentsByType?.ApexTrigger || 0)}</span></div>
     </div>
   </div>
-  <div id="graph"><div id="empty-state" class="empty-state" style="display: none;">Selecciona un dataset per continuar</div></div>
+  <div id="graph-wrapper">
+    <div id="graph"></div>
+    <div id="empty-state" class="empty-state" style="display: none;">Selecciona un projecte Salesforce per continuar</div>
+    <div id="stabilization-overlay" class="stabilization-overlay">Organitzant el graf…</div>
+  </div>
   <div id="controls">
-    <div id="controls-header">⚙️ Parameters<span id="controls-toggle" style="cursor: pointer; font-size: 16px;">−</span></div>
+    <div id="controls-header">Parameters<span id="controls-toggle" style="cursor: pointer; font-size: 16px;">−</span></div>
     <div id="controls-content">
     <div class="control-section">
       <label class="control-label">Search</label>
@@ -711,7 +747,7 @@ export class HtmlVisualizer {
   </div>
 
   <div class="legend">
-    <div class="legend-header">📕 Legend<span id="legend-toggle" style="cursor: pointer; font-size: 16px;">−</span></div>
+    <div class="legend-header">Legend<span id="legend-toggle" style="cursor: pointer; font-size: 16px;">−</span></div>
     <div class="legend-content">
       <div class="legend-title">Zoom</div>
       <div class="legend-item">Scale: <span id="legend-zoom-value">1.00</span></div>
@@ -729,24 +765,18 @@ export class HtmlVisualizer {
         <span>Triggers</span>
       </div>
       <div class="legend-item">
-        <div class="legend-color" style="background: #66BB6A;"></div>
+        <div class="legend-color" style="background: #FF9800;"></div>
         <span>LWC</span>
       </div>
       <div class="legend-item">
-        <div class="legend-color" style="background: #2E7D32;"></div>
+        <div class="legend-color" style="background: #E65100;"></div>
         <span>Aura</span>
-      </div>
-      <hr style="margin: 12px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.2);">
-      <div class="legend-title">Edges</div>
-      <div class="legend-item">
-        <div class="legend-color" style="background: #9C27B0;"></div>
-        <span>Relations</span>
       </div>
     </div>
   </div>
 
   <script>
-    const allDatasets = ${datasetsJson};
+    const allProjects = ${projectsJson};
     const colorMap = ${colorMapJson};
     const STANDARD_OBJECT_ICONS = {
       account: 'account',
@@ -886,12 +916,12 @@ export class HtmlVisualizer {
       iconNode.innerHTML = '<img src=\"' + ICON_BASE + iconName + '.svg\" alt=\"\">';
     }
 
-    function populateDatasetSelects() {
-      const selectHeader = document.getElementById('dataset-select');
+    function populateProjectSelects() {
+      const selectHeader = document.getElementById('project-select');
       [selectHeader].forEach(sel => {
         if (!sel) return;
         sel.innerHTML = '';
-        allDatasets.forEach((d, i) => {
+        allProjects.forEach((d, i) => {
           const opt = document.createElement('option');
           opt.value = i;
           opt.textContent = d.name;
@@ -899,39 +929,43 @@ export class HtmlVisualizer {
         });
       });
     }
-    if (allDatasets && allDatasets.length > 0) {
-      populateDatasetSelects();
+    if (allProjects && allProjects.length > 0) {
+      populateProjectSelects();
     }
 
-    const selectEl = document.getElementById('dataset-select');
-    function onDatasetChange(index) {
+    const selectEl = document.getElementById('project-select');
+    function onProjectChange(index) {
       if (selectEl) selectEl.value = index;
-      switchDataset(index);
+      switchProject(index);
     }
 
     // KAIRO-FIX: Add event listeners for dataset change
     if (selectEl) {
       selectEl.addEventListener('change', function() {
         const index = parseInt(this.value);
-        if (!Number.isNaN(index) && index >= 0 && index < allDatasets.length) {
-          onDatasetChange(index);
+        if (!Number.isNaN(index) && index >= 0 && index < allProjects.length) {
+          onProjectChange(index);
         }
       });
     }
 
-    if (allDatasets.length === 0) {
+    if (allProjects.length === 0) {
       const emptyEl = document.getElementById('empty-state');
       if (emptyEl) emptyEl.style.display = 'flex';
-      const ds = document.querySelector('.dataset-switcher');
+      const stabOverlay = document.getElementById('stabilization-overlay');
+      if (stabOverlay) { stabOverlay.classList.add('hidden'); console.log('[Overlay] hidden (no projects)'); }
+      const ds = document.querySelector('.project-switcher');
       if (ds) ds.style.display = 'none';
       const controls = document.getElementById('controls');
       if (controls) controls.style.display = 'none';
     } else {
     const container = document.getElementById('graph');
-    const nodesDataset = new vis.DataSet(allDatasets[0].visNodes);
-    const edgesDataset = new vis.DataSet(allDatasets[0].visEdges);
+    console.log('[Overlay] visible (initial load with projects)');
+    const nodesDataset = new vis.DataSet(allProjects[0].visNodes);
+    const edgesDataset = new vis.DataSet(allProjects[0].visEdges);
     const data = { nodes: nodesDataset, edges: edgesDataset };
     const options = {
+      layout: { improvedLayout: false },
       physics: { enabled: true, barnesHut: { gravitationalConstant: -5000, centralGravity: 0.03, springLength: 150, springConstant: 0.005, avoidOverlap: 0.5, damping: 0.5 }, stabilization: { enabled: true, iterations: 500 }, solver: 'barnesHut' },
       nodes: { shape: 'dot', font: { size: 12, color: '#ffffff' }, borderWidth: 2, shapeProperties: { borderDashes: false } },
       edges: { width: 1, smooth: { enabled: false }, arrows: { to: { enabled: true, scaleFactor: 0.5 } } },
@@ -1048,20 +1082,20 @@ export class HtmlVisualizer {
       if (!heatmapGrid.length) return;
       heatmapCtx.save();
       heatmapCtx.globalCompositeOperation = 'source-over';
-      heatmapCtx.globalAlpha = 0.85;
+      heatmapCtx.globalAlpha = 0.45;
       heatmapCtx.clearRect(0, 0, heatmapWidth, heatmapHeight);
       for (let y = 0; y < heatmapGridRows; y++) {
         for (let x = 0; x < heatmapGridCols; x++) {
           const value = heatmapGrid[y * heatmapGridCols + x];
           if (value <= 0) continue;
-          const alpha = Math.min(0.9, value / heatmapMax);
+          const alpha = Math.min(0.45, value / heatmapMax);
           heatmapCtx.fillStyle = 'rgba(255, 64, 129, ' + alpha.toFixed(3) + ')';
           heatmapCtx.fillRect(x * heatmapCellW, y * heatmapCellH, heatmapCellW + 0.5, heatmapCellH + 0.5);
         }
       }
       // Grid overlay
-      heatmapCtx.globalAlpha = 0.25;
-      heatmapCtx.strokeStyle = 'rgba(255, 64, 129, 0.35)';
+      heatmapCtx.globalAlpha = 0.15;
+      heatmapCtx.strokeStyle = 'rgba(255, 64, 129, 0.2)';
       heatmapCtx.lineWidth = 1;
       for (let x = 0; x <= heatmapGridCols; x++) {
         const px = Math.round(x * heatmapCellW) + 0.5;
@@ -1112,12 +1146,12 @@ export class HtmlVisualizer {
     updateZoomIndicator(initialScale);
 
     let currentIndex = 0;
-    let currentNodes = allDatasets[0].nodes;
-    let allNodes = allDatasets[0].visNodes.slice();
-    let allEdges = allDatasets[0].visEdges.slice();
-    let currentRecommended = { ...allDatasets[0].recommended, minWeight: 3 };
+    let currentNodes = allProjects[0].nodes;
+    let allNodes = allProjects[0].visNodes.slice();
+    let allEdges = allProjects[0].visEdges.slice();
+    let currentRecommended = { ...allProjects[0].recommended, minWeight: 3 };
     let connectionCounts = new Map();
-    let shouldFreeze = allDatasets[0].visNodes.length <= 900;
+    let shouldFreeze = allProjects[0].visNodes.length <= 900;
     const DEFAULT_MIN_MEMBERS = 3;
 
     function weightDescription(value) {
@@ -1149,16 +1183,16 @@ export class HtmlVisualizer {
     }
 
     function updateStats(index) {
-      const s = allDatasets[index].stats;
+      const s = allProjects[index].stats;
       document.getElementById('stat-components').textContent = s.totalComponents;
       document.getElementById('stat-deps').textContent = s.totalDependencies;
       document.getElementById('stat-objects').textContent = s.componentsByType.CustomObject || 0;
       document.getElementById('stat-apex').textContent = (s.componentsByType.ApexClass || 0) + (s.componentsByType.ApexTrigger || 0);
     }
 
-    function switchDataset(index) {
+    function switchProject(index) {
       currentIndex = index;
-      const d = allDatasets[index];
+      const d = allProjects[index];
       currentNodes = d.nodes;
       allNodes = d.visNodes.slice();
       allEdges = d.visEdges.slice();
@@ -1166,6 +1200,8 @@ export class HtmlVisualizer {
       shouldFreeze = d.visNodes.length <= 900;
       recomputeConnectionCounts();
       updateStats(index);
+      const overlay = document.getElementById('stabilization-overlay');
+      if (overlay) { overlay.classList.remove('hidden'); console.log('[Overlay] shown (switch project)'); }
       applyPhysicsMode();
       resetView();
     }
@@ -1197,15 +1233,22 @@ export class HtmlVisualizer {
       });
     }
 
-    selectEl.addEventListener('change', function() { onDatasetChange(parseInt(this.value, 10)); });
+    selectEl.addEventListener('change', function() { onProjectChange(parseInt(this.value, 10)); });
+
+    function hideStabilizationOverlay() {
+      const overlay = document.getElementById('stabilization-overlay');
+      if (overlay) { overlay.classList.add('hidden'); console.log('[Overlay] hidden (stabilization done)'); }
+    }
 
     function applyPhysicsMode() {
       if (shouldFreeze) {
         network.once('stabilized', function() {
+          hideStabilizationOverlay();
           setTimeout(function() { network.setOptions({ physics: false }); }, 500);
         });
       } else {
         network.setOptions({ physics: { enabled: true, stabilization: { enabled: false } } });
+        setTimeout(hideStabilizationOverlay, 3000);
       }
     }
     applyPhysicsMode();
@@ -1228,6 +1271,21 @@ export class HtmlVisualizer {
         infoPanel.classList.remove('visible');
         setInfoIcon(null);
       }
+    });
+
+    network.on('doubleClick', function(params) {
+      const scale = network.getScale();
+      let pos = network.getViewPosition();
+      if (params.nodes.length > 0) {
+        const nodePos = network.getPositions()[params.nodes[0]];
+        if (nodePos) pos = { x: nodePos.x, y: nodePos.y };
+      }
+      const newScale = Math.min(scale * 1.4, 5);
+      network.moveTo({
+        scale: newScale,
+        position: pos,
+        animation: { duration: 200, easingFunction: 'easeInOutQuad' }
+      });
     });
 
     function pruneSmallComponents(nodesArr, edgesArr, minMembers) {
@@ -1373,7 +1431,7 @@ export class HtmlVisualizer {
     }
 
     function resetView() {
-      const d = allDatasets[currentIndex];
+      const d = allProjects[currentIndex];
       const searchInput = document.getElementById('search-input');
       if (searchInput) searchInput.value = '';
 

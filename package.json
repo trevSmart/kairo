@@ -1,17 +1,16 @@
 {
 	"name": "kairo",
 	"version": "0.1.0",
-	"description": "Salesforce org metadata analyzer - extracts business processes from technical metadata",
+	"description": "Web app to select Salesforce project repos and visualize dependencies",
 	"type": "module",
 	"main": "dist/index.js",
 	"bin": {
-		"kairo": "./dist/cli.js"
+		"kairo": "./dist/index.js"
 	},
 	"scripts": {
 		"build": "tsc",
-		"dev": "tsx src/cli.ts",
-		"analyze": "tsx src/cli.ts analyze",
-		"watch": "chokidar \"src/**/*.ts\" -c \"npm run analyze\" --initial",
+		"dev": "tsx src/index.ts",
+		"start": "tsx src/index.ts",
 		"test": "vitest",
 		"test:ui": "vitest --ui",
 		"lint": "eslint src/**/*.ts",
@@ -40,7 +39,6 @@
 		"vitest": "^4.0.18"
 	},
 	"dependencies": {
-		"commander": "^12.1.0",
 		"fast-xml-parser": "^5.3.4",
 		"graphology": "^0.25.4",
 		"graphology-communities-louvain": "^2.0.2",

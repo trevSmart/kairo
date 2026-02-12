@@ -8,7 +8,7 @@
 .localdevserver/
 deploy-options.json
 force-app/
-test-data/
+test-data*/
 
 # LWC VSCode autocomplete
 **/lwc/jsconfig.json
@@ -49,5 +49,8 @@ $RECYCLE.BIN/
 **/.venv/
 **/venv/
 output/dependency-graph.html
+output/component-list.html
+output/graph.html
+output/list.html
 output/index.html
 test-results/.last-run.json

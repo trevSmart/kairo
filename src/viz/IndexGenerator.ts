@@ -2,53 +2,57 @@ import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname } from 'path';
 import type { AnalysisResult } from '../types.js';
 
-type DatasetInput = {
+export type ProjectInput = {
   id: string;
   name: string;
   source: string;
-  result: AnalysisResult;
+  result?: AnalysisResult;
+  components?: number;
+  dependencies?: number;
 };
 
 export class IndexGenerator {
-  generate(datasets: DatasetInput[], outputPath: string): void {
+  generate(projects: ProjectInput[], outputPath: string): void {
     const dir = dirname(outputPath);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    const html = this.generateHtml(datasets);
+    const html = this.generateHtml(projects);
     writeFileSync(outputPath, html);
     console.log(`📄 Index page saved to: ${outputPath}`);
   }
 
-  private generateHtml(datasets: DatasetInput[]): string {
-    const totalComponents = datasets.reduce((s, d) => s + d.result.stats.totalComponents, 0);
-    const totalDeps = datasets.reduce((s, d) => s + d.result.stats.totalDependencies, 0);
-    const datasetList =
-      datasets.length > 0
-        ? datasets
-            .map((d) => `${d.name} (${d.result.stats.totalComponents} components)`)
+  generateHtml(projects: ProjectInput[]): string {
+    const getComponents = (p: ProjectInput) => p.result?.stats.totalComponents ?? p.components ?? 0;
+    const getDeps = (p: ProjectInput) => p.result?.stats.totalDependencies ?? p.dependencies ?? 0;
+    const totalComponents = projects.reduce((s, p) => s + getComponents(p), 0);
+    const totalDeps = projects.reduce((s, p) => s + getDeps(p), 0);
+    const projectList =
+      projects.length > 0
+        ? projects
+            .map((p) => `${p.name} (${getComponents(p)} components)`)
             .join(', ')
         : '';
     const graphDescription =
-      datasets.length > 0
-        ? `Interactive dependency graph. Use the <strong>Dataset</strong> dropdown in the header to switch between: ${datasetList}.`
-        : 'Interactive dependency graph. Afegir datasets per començar.';
+      projects.length > 0
+        ? `Interactive dependency graph. Use the <strong>Project</strong> dropdown in the header to switch between: ${projectList}.`
+        : 'Interactive dependency graph. Afegir projectes Salesforce per començar.';
     const listDescription =
-      datasets.length > 0
-        ? `Browse all components as an interactive, searchable list with detailed dependency information. ${datasets.length > 1 ? 'Shows first dataset.' : ''}`
-        : 'Browse components as a list. Afegir datasets per començar.';
-    const datasetsJson = JSON.stringify(
-      datasets.map((d) => ({
-        id: d.id,
-        name: d.name,
-        source: d.source,
-        components: d.result.stats.totalComponents,
-        dependencies: d.result.stats.totalDependencies,
+      projects.length > 0
+        ? `Browse all components as an interactive, searchable list with detailed dependency information. ${projects.length > 1 ? 'Shows first project.' : ''}`
+        : 'Browse components as a list. Afegir projectes Salesforce per començar.';
+    const projectsJson = JSON.stringify(
+      projects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        source: p.source,
+        components: getComponents(p),
+        dependencies: getDeps(p),
       }))
     );
     return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Kairo - Multi-dataset analysis</title>
+  <title>Kairo - Salesforce Projects</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -67,15 +71,15 @@ export class IndexGenerator {
     .view-icon { font-size: 48px; margin-bottom: 16px; }
     .view-title { font-size: 24px; font-weight: bold; margin-bottom: 12px; color: #333; }
     .view-description { font-size: 14px; color: #666; line-height: 1.6; }
-    .dataset-list { font-size: 13px; color: #555; margin-top: 12px; }
-    .datasets-list { list-style: none; }
-    .dataset-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #eee; }
-    .dataset-item:last-child { border-bottom: none; }
-    .dataset-info { flex: 1; min-width: 0; }
-    .dataset-name { font-weight: 600; color: #333; font-size: 15px; }
-    .dataset-source { font-size: 12px; color: #666; margin-top: 2px; word-break: break-all; }
-    .dataset-stats { font-size: 12px; color: #888; margin-top: 2px; }
-    .dataset-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .project-list { font-size: 13px; color: #555; margin-top: 12px; }
+    .projects-list { list-style: none; }
+    .project-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #eee; }
+    .project-item:last-child { border-bottom: none; }
+    .project-info { flex: 1; min-width: 0; }
+    .project-name { font-weight: 600; color: #333; font-size: 15px; }
+    .project-source { font-size: 12px; color: #666; margin-top: 2px; word-break: break-all; }
+    .project-stats { font-size: 12px; color: #888; margin-top: 2px; }
+    .project-actions { display: flex; gap: 6px; flex-shrink: 0; }
     .btn { padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: background 0.2s; }
     .btn-sm { padding: 4px 10px; font-size: 12px; }
     .btn-primary { background: #667eea; color: white; }
@@ -84,12 +88,12 @@ export class IndexGenerator {
     .btn-secondary:hover { background: #d1d5db; }
     .btn-danger { background: #fef2f2; color: #dc2626; }
     .btn-danger:hover { background: #fee2e2; }
-    .add-dataset-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 16px; }
+    .add-project-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 16px; }
     .form-group { flex: 1; min-width: 120px; }
     .form-group label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
     .form-group input { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
     .form-group input:focus { outline: none; border-color: #667eea; }
-    .empty-datasets { text-align: center; padding: 32px; color: #6b7280; font-size: 15px; }
+    .empty-projects { text-align: center; padding: 32px; color: #6b7280; font-size: 15px; }
     .refresh-hint { font-size: 12px; color: #6b7280; margin-top: 8px; }
     footer { text-align: center; color: rgba(255,255,255,0.8); margin-top: 24px; font-size: 14px; }
   </style>
@@ -97,30 +101,30 @@ export class IndexGenerator {
 <body>
   <div class="container">
     <h1>Kairo</h1>
-    <p class="subtitle">${datasets.length > 0 ? 'Switch between datasets in the graph view' : 'Afegir datasets per començar'}</p>
+    <p class="subtitle">${projects.length > 0 ? 'Canvia entre projectes Salesforce al graph view' : 'Afegir projectes Salesforce per començar'}</p>
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-value" id="stat-datasets">${datasets.length}</div><div class="stat-label">Datasets</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-projects">${projects.length}</div><div class="stat-label">Projectes</div></div>
       <div class="stat-card"><div class="stat-value" id="stat-components">${totalComponents.toLocaleString()}</div><div class="stat-label">Total components</div></div>
       <div class="stat-card"><div class="stat-value" id="stat-deps">${totalDeps.toLocaleString()}</div><div class="stat-label">Total dependencies</div></div>
     </div>
 
     <div class="section-card">
       <div class="section-title">
-        <span>Datasets</span>
+        <span>Projectes Salesforce</span>
         <button type="button" class="btn btn-primary btn-sm" id="btn-refresh">Refresh</button>
       </div>
-      <div id="datasets-container">
-        <ul class="datasets-list" id="datasets-list"></ul>
-        <div class="empty-datasets" id="empty-datasets" style="display: none;">No hi ha datasets. Afegeix-ne un per començar.</div>
+      <div id="projects-container">
+        <ul class="projects-list" id="projects-list"></ul>
+        <div class="empty-projects" id="empty-projects" style="display: none;">No hi ha projectes. Afegeix-ne un per començar.</div>
       </div>
-      <div class="add-dataset-form">
+      <div class="add-project-form">
         <div class="form-group" style="flex: 0 0 120px;">
           <label for="new-id">ID</label>
-          <input type="text" id="new-id" placeholder="my-dataset">
+          <input type="text" id="new-id" placeholder="my-project">
         </div>
         <div class="form-group" style="flex: 1; min-width: 140px;">
           <label for="new-name">Nom</label>
-          <input type="text" id="new-name" placeholder="My Dataset">
+          <input type="text" id="new-name" placeholder="My Salesforce Project">
         </div>
         <div class="form-group" style="flex: 2; min-width: 200px;">
           <label for="new-source">Ruta</label>
@@ -128,11 +132,11 @@ export class IndexGenerator {
         </div>
         <button type="button" class="btn btn-primary" id="btn-add">Crear</button>
       </div>
-      <p class="refresh-hint">Per re-analitzar: <code>npm run analyze</code>. Per persistir canvis a config: actualitza <code>config/datasets.json</code>.</p>
+      <p class="refresh-hint">L'anàlisi es genera quan obres la list view o graph view d'un projecte. Per persistir canvis: actualitza <code>config/projects.json</code>.</p>
     </div>
 
     <div class="views-grid">
-      ${datasets.length > 0 ? `<a href="component-list.html" class="view-card">
+      ${projects.length > 0 ? `<a href="list.html" class="view-card">
         <div class="view-icon">📋</div>
         <div class="view-title">List view</div>
         <div class="view-description">
@@ -140,7 +144,7 @@ export class IndexGenerator {
         </div>
       </a>
       ` : ''}
-      <a href="dependency-graph.html" class="view-card">
+      <a href="graph.html" class="view-card">
         <div class="view-icon">🕸️</div>
         <div class="view-title">Graph view</div>
         <div class="view-description">
@@ -152,75 +156,85 @@ export class IndexGenerator {
   </div>
 
   <script>
-    const STORAGE_KEY = 'kairo-datasets';
-    const initialDatasets = ${datasetsJson};
+    const STORAGE_KEY = 'kairo-projects';
+    const initialProjects = ${projectsJson};
 
-    function loadDatasets() {
+    function loadProjects() {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY);
+        let stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) {
+          const legacy = localStorage.getItem('kairo-datasets');
+          if (legacy) {
+            localStorage.setItem(STORAGE_KEY, legacy);
+            localStorage.removeItem('kairo-datasets');
+            stored = legacy;
+          }
+        }
         if (stored) {
           const parsed = JSON.parse(stored);
-          return Array.isArray(parsed) ? parsed : initialDatasets;
+          return Array.isArray(parsed) ? parsed : initialProjects;
         }
       } catch (e) {}
-      return initialDatasets;
+      return initialProjects;
     }
 
-    function saveDatasets(datasets) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(datasets));
-      renderDatasets();
+    function saveProjects(projects) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+      renderProjects();
       updateStats();
     }
 
     function updateStats() {
-      const datasets = loadDatasets();
+      const projects = loadProjects();
       let totalComponents = 0;
       let totalDeps = 0;
-      datasets.forEach(d => {
-        totalComponents += d.components || 0;
-        totalDeps += (d.dependencies !== undefined ? d.dependencies : 0);
+      projects.forEach(p => {
+        totalComponents += p.components || 0;
+        totalDeps += (p.dependencies !== undefined ? p.dependencies : 0);
       });
-      const statEls = document.querySelectorAll('#stat-datasets, #stat-components, #stat-deps');
+      const statEls = document.querySelectorAll('#stat-projects, #stat-components, #stat-deps');
       if (statEls.length >= 3) {
-        statEls[0].textContent = datasets.length;
+        statEls[0].textContent = projects.length;
         statEls[1].textContent = totalComponents.toLocaleString();
         statEls[2].textContent = totalDeps.toLocaleString();
       }
     }
 
-    function renderDatasets() {
-      const datasets = loadDatasets();
-      const listEl = document.getElementById('datasets-list');
-      const emptyEl = document.getElementById('empty-datasets');
+    function renderProjects() {
+      const projects = loadProjects();
+      const listEl = document.getElementById('projects-list');
+      const emptyEl = document.getElementById('empty-projects');
       if (!listEl || !emptyEl) return;
 
       listEl.innerHTML = '';
-      if (datasets.length === 0) {
+      if (projects.length === 0) {
         emptyEl.style.display = 'block';
         return;
       }
       emptyEl.style.display = 'none';
 
-      datasets.forEach((d, i) => {
+      projects.forEach((p, i) => {
         const li = document.createElement('li');
-        li.className = 'dataset-item';
+        li.className = 'project-item';
         li.dataset.index = String(i);
         const isEditing = li.dataset.editing === 'true';
         li.innerHTML = \`
-          <div class="dataset-info">
-            <div class="dataset-name" data-field="name">\${escapeHtml(d.name)}</div>
-            <div class="dataset-source" data-field="source">\${escapeHtml(d.source)}</div>
-            <div class="dataset-stats">\${(d.components || 0).toLocaleString()} components\${d.dependencies !== undefined ? ', ' + d.dependencies.toLocaleString() + ' deps' : ''}</div>
+          <div class="project-info">
+            <div class="project-name" data-field="name">\${escapeHtml(p.name)}</div>
+            <div class="project-source" data-field="source">\${escapeHtml(p.source)}</div>
+            <div class="project-stats">\${(p.components || 0).toLocaleString()} components\${p.dependencies !== undefined ? ', ' + p.dependencies.toLocaleString() + ' deps' : ''}</div>
           </div>
-          <div class="dataset-actions">
+          <div class="project-actions">
+            <a href="list.html?project=\${encodeURIComponent(p.id)}" class="btn btn-primary btn-sm" title="List view">📋</a>
+            <a href="graph.html?project=\${encodeURIComponent(p.id)}" class="btn btn-primary btn-sm" title="Graph view">🕸️</a>
             <button type="button" class="btn btn-secondary btn-sm" data-action="rename" title="Renombrar">✎</button>
             <button type="button" class="btn btn-danger btn-sm" data-action="delete" title="Eliminar">✕</button>
           </div>
         \`;
         listEl.appendChild(li);
 
-        li.querySelector('[data-action="rename"]').addEventListener('click', () => renameDataset(i));
-        li.querySelector('[data-action="delete"]').addEventListener('click', () => deleteDataset(i));
+        li.querySelector('[data-action="rename"]').addEventListener('click', () => renameProject(i));
+        li.querySelector('[data-action="delete"]').addEventListener('click', () => deleteProject(i));
       });
     }
 
@@ -231,61 +245,61 @@ export class IndexGenerator {
       return d.innerHTML;
     }
 
-    function renameDataset(index) {
-      const datasets = loadDatasets();
-      const d = datasets[index];
-      if (!d) return;
-      const newName = prompt('Nou nom:', d.name);
+    function renameProject(index) {
+      const projects = loadProjects();
+      const p = projects[index];
+      if (!p) return;
+      const newName = prompt('Nou nom:', p.name);
       if (newName !== null && newName.trim() !== '') {
-        datasets[index] = { ...d, name: newName.trim() };
-        saveDatasets(datasets);
+        projects[index] = { ...p, name: newName.trim() };
+        saveProjects(projects);
       }
     }
 
-    function deleteDataset(index) {
-      const datasets = loadDatasets();
-      const d = datasets[index];
-      if (!d || !confirm('Eliminar "' + d.name + '"?')) return;
-      datasets.splice(index, 1);
-      saveDatasets(datasets);
+    function deleteProject(index) {
+      const projects = loadProjects();
+      const p = projects[index];
+      if (!p || !confirm('Eliminar "' + p.name + '"?')) return;
+      projects.splice(index, 1);
+      saveProjects(projects);
     }
 
-    function addDataset() {
+    function addProject() {
       const idEl = document.getElementById('new-id');
       const nameEl = document.getElementById('new-name');
       const sourceEl = document.getElementById('new-source');
-      const id = (idEl && idEl.value || '').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-') || 'dataset';
+      const id = (idEl && idEl.value || '').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-') || 'project';
       const name = (nameEl && nameEl.value || '').trim() || id;
       const source = (sourceEl && sourceEl.value || '').trim();
       if (!source) {
         alert('La ruta és obligatòria.');
         return;
       }
-      const datasets = loadDatasets();
-      if (datasets.some(d => d.id === id)) {
-        alert('Ja existeix un dataset amb aquest ID.');
+      const projects = loadProjects();
+      if (projects.some(p => p.id === id)) {
+        alert('Ja existeix un projecte amb aquest ID.');
         return;
       }
-      datasets.push({ id, name, source, components: 0 });
-      saveDatasets(datasets);
+      projects.push({ id, name, source, components: 0 });
+      saveProjects(projects);
       if (idEl) idEl.value = '';
       if (nameEl) nameEl.value = '';
       if (sourceEl) sourceEl.value = '';
     }
 
-    function refreshDatasets() {
+    function refreshProjects() {
       window.location.reload();
     }
 
-    document.getElementById('btn-add')?.addEventListener('click', addDataset);
-    document.getElementById('btn-refresh')?.addEventListener('click', refreshDatasets);
+    document.getElementById('btn-add')?.addEventListener('click', addProject);
+    document.getElementById('btn-refresh')?.addEventListener('click', refreshProjects);
 
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored && initialDatasets.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialDatasets));
+    if (!stored && initialProjects.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialProjects));
     }
 
-    renderDatasets();
+    renderProjects();
     updateStats();
   </script>
 </body>
