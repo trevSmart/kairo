@@ -10,6 +10,7 @@
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsx src/cli.ts",
+		"start": "tsx src/server.ts",
 		"analyze": "tsx src/cli.ts analyze",
 		"analyze:datasets": "tsx src/cli.ts analyze --datasets",
 		"watch": "chokidar \"src/**/*.ts\" -c \"npm run analyze\" --initial",
@@ -29,6 +30,7 @@
 	"license": "MIT",
 	"devDependencies": {
 		"@playwright/test": "^1.58.2",
+		"@types/express": "^5.0.6",
 		"@types/node": "^22.10.5",
 		"@typescript-eslint/eslint-plugin": "^8.22.1",
 		"@typescript-eslint/parser": "^8.22.1",
@@ -42,6 +44,7 @@
 	},
 	"dependencies": {
 		"commander": "^12.1.0",
+		"express": "^5.2.1",
 		"fast-xml-parser": "^5.3.4",
 		"graphology": "^0.25.4",
 		"graphology-communities-louvain": "^2.0.2",

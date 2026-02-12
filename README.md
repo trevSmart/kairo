@@ -18,22 +18,24 @@ Kairo analyzes Salesforce metadata to:
 # Install dependencies
 npm install
 
-# Analyze the test data (Vodafone org)
-npm run analyze
-
-# View the result
-open output/dependency-graph.html
+# Start the app
+npm start
 ```
+
+Open http://localhost:3456. Add datasets (or use existing ones from `config/datasets.json`), then open **List view** or **Graph view** for a dataset. The app analyzes that dataset on demand when you open the view—no need to run `npm run analyze` beforehand.
 
 ## Usage
 
+**Web app (recommended):** Run `npm start`, add datasets on the homepage, then open list or graph view. Analysis runs on demand for the dataset you open.
+
+**CLI (static export):** Generate HTML files for a single source or for all datasets in `config/datasets.json`:
+
 ```bash
-# Analyze custom metadata location
+# Single source
 npm run dev -- analyze --source /path/to/salesforce/metadata
 
-# Or after building
-npm run build
-npm start -- analyze --source ./test-data --output ./output
+# All datasets from config (generates multi-dataset graph)
+npm run analyze:datasets
 ```
 
 ## Project Structure
@@ -46,6 +48,7 @@ kairo/
 │   ├── viz/              # HTML visualization
 │   ├── analyzer.ts       # Main analysis orchestrator
 │   ├── cli.ts            # CLI interface
+│   ├── server.ts         # Web app server (on-demand analysis)
 │   └── types.ts          # TypeScript types
 ├── test-data/            # Sample Salesforce org metadata (for testing)
 ├── output/               # Analysis results (generated)

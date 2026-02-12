@@ -1,29 +1,25 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname } from 'path';
-import type { AnalysisResult, Dependency } from '../types.js';
+import type { AnalysisResult } from '../types.js';
 import { DependencyWeightCalculator } from '../utils/DependencyWeightCalculator.js';
 
 /**
- * Simple HTML visualizer that creates a list-based view instead of a graph.
+ * List-based visualizer that creates a card view instead of a graph.
  * More reliable for large datasets, easier to debug.
  */
-export class SimpleHtmlVisualizer {
-  generate(result: AnalysisResult, outputPath: string): void {
-    const dir = dirname(outputPath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
+export type ListVisualizerOptions = {
+  datasetName?: string;
+  backHref?: string;
+};
 
-    // Count connections for each component and track weighted dependencies
+export class ListVisualizer {
+  generateToHtml(result: AnalysisResult, options?: ListVisualizerOptions): string {
     const connectionCounts = new Map<string, number>();
     const incomingConnections = new Map<string, Array<{ id: string; weight: number }>>();
     const outgoingConnections = new Map<string, Array<{ id: string; weight: number }>>();
-    const dependencyMap = new Map<string, Dependency>();
 
     result.graph.dependencies.forEach(dep => {
       const weight = dep.weight ?? DependencyWeightCalculator.calculate(dep);
-      const depKey = `${dep.from}->${dep.to}`;
-      dependencyMap.set(depKey, dep);
 
       connectionCounts.set(dep.from, (connectionCounts.get(dep.from) || 0) + 1);
       connectionCounts.set(dep.to, (connectionCounts.get(dep.to) || 0) + 1);
@@ -35,7 +31,6 @@ export class SimpleHtmlVisualizer {
       incomingConnections.get(dep.to)!.push({ id: dep.from, weight });
     });
 
-    // Sort components by connection count
     const sortedComponents = Array.from(result.graph.components.values())
       .map(comp => ({
         ...comp,
@@ -45,9 +40,17 @@ export class SimpleHtmlVisualizer {
       }))
       .sort((a, b) => b.connections - a.connections);
 
-    const html = this.generateHtml(sortedComponents, result.stats);
+    return this.generateHtml(sortedComponents, result.stats, options);
+  }
+
+  generate(result: AnalysisResult, outputPath: string): void {
+    const dir = dirname(outputPath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    const html = this.generateToHtml(result);
     writeFileSync(outputPath, html);
-    console.log(`📊 Simple visualization saved to: ${outputPath}`);
+    console.log(`📊 List visualization saved to: ${outputPath}`);
   }
 
   private generateHtml(
@@ -60,8 +63,13 @@ export class SimpleHtmlVisualizer {
       incoming: Array<{ id: string; weight: number }>;
       outgoing: Array<{ id: string; weight: number }>;
     }>,
-    stats: AnalysisResult['stats']
+    stats: AnalysisResult['stats'],
+    options?: ListVisualizerOptions
   ): string {
+    const backLink = options?.backHref
+      ? `<a href="${options.backHref}" style="color: white; text-decoration: none; font-size: 14px; margin-bottom: 10px; display: inline-block;">← Back to datasets</a>`
+      : '';
+    const title = options?.datasetName ? ` – ${options.datasetName}` : '';
     const componentsHtml = components
       .map(
         comp => {
@@ -332,7 +340,8 @@ export class SimpleHtmlVisualizer {
 </head>
 <body>
   <div id="header">
-    <h1>🎯 Kairo - Salesforce Metadata Analysis</h1>
+    ${backLink}
+    <h1>🎯 Kairo - Salesforce Metadata Analysis${title}</h1>
     <div id="stats">
       <div class="stat">
         <span>Total Components:</span>

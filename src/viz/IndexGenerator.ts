@@ -2,7 +2,110 @@ import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname } from 'path';
 import type { AnalysisResult } from '../types.js';
 
+export type DatasetEntry = { id: string; name: string; source?: string };
+
 export class IndexGenerator {
+  generateAppHomeHtml(datasets: DatasetEntry[]): string {
+    const datasetRows = datasets
+      .map(
+        ds => `
+      <div class="dataset-row" data-id="${ds.id}">
+        <div class="dataset-info">
+          <span class="dataset-name">${ds.name}</span>
+          <span class="dataset-id">${ds.id}</span>
+        </div>
+        <div class="dataset-actions">
+          <a href="/list/${ds.id}" class="btn btn-list">📋 List</a>
+          <a href="/graph/${ds.id}" class="btn btn-graph">🕸️ Graph</a>
+          <button type="button" class="btn btn-remove" onclick="removeDataset('${ds.id}', '${ds.name.replace(/'/g, "\\'")}')">Remove</button>
+        </div>
+      </div>`
+      )
+      .join('');
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Kairo - Dataset Manager</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { color: white; font-size: 36px; margin-bottom: 8px; }
+    .subtitle { color: rgba(255,255,255,0.9); font-size: 16px; margin-bottom: 30px; }
+    .panel { background: white; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); }
+    .panel h2 { font-size: 18px; margin-bottom: 16px; color: #333; }
+    .add-form { display: flex; flex-direction: column; gap: 12px; }
+    .add-form input { padding: 10px 14px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; }
+    .add-form input:focus { outline: none; border-color: #667eea; }
+    .add-form button { padding: 12px; background: #667eea; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .add-form button:hover { background: #5568d3; }
+    .dataset-row { display: flex; justify-content: space-between; align-items: center; padding: 16px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 10px; background: #fafafa; }
+    .dataset-row:last-child { margin-bottom: 0; }
+    .dataset-info { display: flex; flex-direction: column; gap: 4px; }
+    .dataset-name { font-weight: 600; color: #333; }
+    .dataset-id { font-size: 12px; color: #666; }
+    .dataset-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; text-decoration: none; cursor: pointer; border: none; }
+    .btn-list { background: #4CAF50; color: white; }
+    .btn-list:hover { background: #43a047; }
+    .btn-graph { background: #2196F3; color: white; }
+    .btn-graph:hover { background: #1e88e5; }
+    .btn-remove { background: #f44336; color: white; }
+    .btn-remove:hover { background: #e53935; }
+    .empty-state { color: #666; text-align: center; padding: 40px 20px; }
+    .empty-state p { margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎯 Kairo</h1>
+    <p class="subtitle">Analyze Salesforce metadata. Add datasets and open list or graph view to run analysis on demand.</p>
+
+    <div class="panel">
+      <h2>Add dataset</h2>
+      <form class="add-form" onsubmit="return addDataset(event)">
+        <input type="text" name="id" placeholder="ID (e.g. myproject)" required>
+        <input type="text" name="name" placeholder="Display name" required>
+        <input type="text" name="source" placeholder="Source path (e.g. ./force-app/main/default)" required>
+        <button type="submit">Add dataset</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Datasets</h2>
+      <div id="dataset-list">
+        ${datasets.length === 0 ? '<div class="empty-state"><p>No datasets yet.</p><p>Add one above to get started.</p></div>' : datasetRows}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function addDataset(e) {
+      e.preventDefault();
+      const form = e.target;
+      const body = JSON.stringify({
+        id: form.id.value.trim(),
+        name: form.name.value.trim(),
+        source: form.source.value.trim()
+      });
+      const res = await fetch('/api/datasets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      if (!res.ok) { alert('Failed to add dataset'); return false; }
+      location.reload();
+      return false;
+    }
+    async function removeDataset(id, name) {
+      if (!confirm('Remove dataset "' + name + '"?')) return;
+      const res = await fetch('/api/datasets/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (!res.ok) { alert('Failed to remove dataset'); return; }
+      location.reload();
+    }
+  </script>
+</body>
+</html>`;
+  }
+
   generate(result: AnalysisResult, outputPath: string): void {
     const dir = dirname(outputPath);
     if (!existsSync(dir)) {

@@ -2,8 +2,8 @@
 import { readFileSync, existsSync } from 'fs';
 import { Command } from 'commander';
 import { MetadataAnalyzer } from './analyzer.js';
-import { HtmlVisualizer } from './viz/HtmlVisualizer.js';
-import { SimpleHtmlVisualizer } from './viz/SimpleHtmlVisualizer.js';
+import { GraphVisualizer } from './viz/GraphVisualizer.js';
+import { ListVisualizer } from './viz/ListVisualizer.js';
 import { IndexGenerator } from './viz/IndexGenerator.js';
 import { join, isAbsolute } from 'path';
 
@@ -27,8 +27,8 @@ program
     console.log('==========================\n');
 
     const analyzer = new MetadataAnalyzer();
-    const graphVisualizer = new HtmlVisualizer();
-    const simpleVisualizer = new SimpleHtmlVisualizer();
+    const graphVisualizer = new GraphVisualizer();
+    const listVisualizer = new ListVisualizer();
     const indexGenerator = new IndexGenerator();
 
     if (options.datasets) {
@@ -80,15 +80,15 @@ program
     const graphPath = join(outputDir, 'dependency-graph.html');
     graphVisualizer.generate(result, graphPath);
 
-    const simplePath = join(outputDir, 'component-list.html');
-    simpleVisualizer.generate(result, simplePath);
+    const listPath = join(outputDir, 'component-list.html');
+    listVisualizer.generate(result, listPath);
 
     const indexPath = join(outputDir, 'index.html');
     indexGenerator.generate(result, indexPath);
 
     console.log('\n✨ Analysis complete!');
     console.log(`   🏠 Index: ${indexPath}`);
-    console.log(`   📋 List view: ${simplePath}`);
+    console.log(`   📋 List view: ${listPath}`);
     console.log(`   🕸️  Graph view: ${graphPath}`);
   });
 

@@ -337,7 +337,7 @@ export class GraphVisualizer {
     }
     const html = this.generateToHtml(result);
     writeFileSync(outputPath, html);
-    console.log(`📊 Graph visualization saved to: ${outputPath}`);
+    console.log(`📊 Visualization saved to: ${outputPath}`);
   }
 
   /** Build nodes and edges from AnalysisResult (same logic as generate). */
