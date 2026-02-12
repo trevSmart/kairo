@@ -5,7 +5,7 @@ import { DependencyWeightCalculator } from '../utils/DependencyWeightCalculator.
 
 /**
  * Simple HTML visualizer that creates a list-based view instead of a graph.
- * More reliable for large datasets, easier to debug.
+ * More reliable for large projects, easier to debug.
  */
 export class SimpleHtmlVisualizer {
   generate(result: AnalysisResult, outputPath: string): void {
@@ -48,6 +48,31 @@ export class SimpleHtmlVisualizer {
     const html = this.generateHtml(sortedComponents, result.stats);
     writeFileSync(outputPath, html);
     console.log(`📊 Simple visualization saved to: ${outputPath}`);
+  }
+
+  /** Generate list view HTML from analysis result (for API/server use). */
+  generateHtmlFromResult(result: AnalysisResult): string {
+    const connectionCounts = new Map<string, number>();
+    const incomingConnections = new Map<string, Array<{ id: string; weight: number }>>();
+    const outgoingConnections = new Map<string, Array<{ id: string; weight: number }>>();
+    result.graph.dependencies.forEach(dep => {
+      const weight = dep.weight ?? DependencyWeightCalculator.calculate(dep);
+      connectionCounts.set(dep.from, (connectionCounts.get(dep.from) || 0) + 1);
+      connectionCounts.set(dep.to, (connectionCounts.get(dep.to) || 0) + 1);
+      if (!outgoingConnections.has(dep.from)) outgoingConnections.set(dep.from, []);
+      outgoingConnections.get(dep.from)!.push({ id: dep.to, weight });
+      if (!incomingConnections.has(dep.to)) incomingConnections.set(dep.to, []);
+      incomingConnections.get(dep.to)!.push({ id: dep.from, weight });
+    });
+    const sortedComponents = Array.from(result.graph.components.values())
+      .map(comp => ({
+        ...comp,
+        connections: connectionCounts.get(comp.id) || 0,
+        incoming: incomingConnections.get(comp.id) || [],
+        outgoing: outgoingConnections.get(comp.id) || [],
+      }))
+      .sort((a, b) => b.connections - a.connections);
+    return this.generateHtml(sortedComponents, result.stats);
   }
 
   private generateHtml(
@@ -128,6 +153,8 @@ export class SimpleHtmlVisualizer {
       top: 0;
       z-index: 100;
     }
+    #header a { color: white; text-decoration: none; opacity: 0.9; }
+    #header a:hover { opacity: 1; }
     h1 { margin: 0 0 15px 0; font-size: 32px; }
     #stats {
       display: flex;
@@ -332,7 +359,7 @@ export class SimpleHtmlVisualizer {
 </head>
 <body>
   <div id="header">
-    <h1>🎯 Kairo - Salesforce Metadata Analysis</h1>
+    <h1><a href="./">← Tornar</a> · 🎯 Kairo - Salesforce Metadata Analysis</h1>
     <div id="stats">
       <div class="stat">
         <span>Total Components:</span>

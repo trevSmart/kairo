@@ -26,7 +26,10 @@ export class MetadataAnalyzer {
     }
   }
 
-  async analyze(sourceDir: string): Promise<AnalysisResult> {
+  async analyze(
+    sourceDir: string,
+    onProgress?: (processed: number, total: number) => void | Promise<void>
+  ): Promise<AnalysisResult> {
     console.log(`🔍 Scanning metadata in: ${sourceDir}`);
 
     const files = this.scanner.scan(sourceDir);
@@ -34,6 +37,7 @@ export class MetadataAnalyzer {
 
     const graphBuilder = new GraphBuilder();
     let processed = 0;
+    await (onProgress?.(0, files.length) ?? Promise.resolve());
 
     for (const obj of this.standardObjects) {
       this.objectNameMap.set(obj.toLowerCase(), obj);
@@ -112,6 +116,9 @@ export class MetadataAnalyzer {
         processed++;
         if (processed % 100 === 0) {
           console.log(`  ⚙️  Processed ${processed}/${files.length} files...`);
+        }
+        if (onProgress && (processed % 10 === 0 || processed === files.length)) {
+          await (onProgress(processed, files.length) ?? Promise.resolve());
         }
       } catch (error) {
         console.warn(`  ⚠️  Failed to parse ${file.path}: ${error}`);

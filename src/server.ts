@@ -4,10 +4,9 @@ import { join, isAbsolute, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { MetadataAnalyzer } from './analyzer.js';
 import { HtmlVisualizer } from './viz/HtmlVisualizer.js';
-import { SimpleHtmlVisualizer } from './viz/SimpleHtmlVisualizer.js';
 import { IndexGenerator } from './viz/IndexGenerator.js';
 import { DependencyWeightCalculator } from './utils/DependencyWeightCalculator.js';
-import type { AnalysisResult, Dependency } from './types.js';
+import type { AnalysisResult } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..');
@@ -98,27 +97,64 @@ function sendHtml(res: ServerResponse, html: string, status = 200): void {
   res.end(html);
 }
 
+function createNdjsonStream<T>(
+  res: ServerResponse,
+  onAnalyze: (onProgress: (processed: number, total: number) => void) => Promise<AnalysisResult>,
+  transform: (result: AnalysisResult) => T
+): void {
+  res.writeHead(200, {
+    'Content-Type': 'application/x-ndjson',
+    'Transfer-Encoding': 'chunked',
+  });
+  const writeLine = (obj: object) => res.write(JSON.stringify(obj) + '\n');
+  const onProgress = (processed: number, total: number) => {
+    writeLine({ progress: { processed, total } });
+    return new Promise<void>(r => setImmediate(r));
+  };
+
+  onAnalyze(onProgress)
+    .then(analysisResult => {
+      writeLine({ result: transform(analysisResult) });
+      res.end();
+    })
+    .catch(err => {
+      console.error('Stream analyze error:', err);
+      writeLine({ error: String(err) });
+      res.end();
+    });
+}
+
 export async function createApp(): Promise<void> {
   const analyzer = new MetadataAnalyzer();
-  const simpleViz = new SimpleHtmlVisualizer();
+  const graphViz = new HtmlVisualizer();
   const indexGenerator = new IndexGenerator();
 
-  const configPath = join(PROJECT_ROOT, 'config/datasets.json');
-  let datasets: Array<{ id: string; name: string; source: string }> = [];
+  const projectsPath = join(PROJECT_ROOT, 'config/projects.json');
+  const datasetsPath = join(PROJECT_ROOT, 'config/datasets.json');
+  let projects: Array<{ id: string; name: string; source: string }> = [];
+  const configPath = existsSync(projectsPath) ? projectsPath : datasetsPath;
   if (existsSync(configPath)) {
-    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as { datasets: Array<{ id: string; name: string; source: string }> };
-    datasets = config.datasets || [];
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as {
+      projects?: Array<{ id: string; name: string; source: string }>;
+      datasets?: Array<{ id: string; name: string; source: string }>;
+    };
+    projects = config.projects ?? config.datasets ?? [];
+  }
+
+  function findProject(id: string): { id: string; name: string; source: string } | undefined {
+    return projects.find(p => p.id === id);
   }
 
   const server = createServer(async (req, res) => {
     const url = req.url || '/';
     const method = req.method || 'GET';
+    const urlObj = new URL(url, 'http://localhost');
 
-    if (method === 'GET' && url === '/api/datasets') {
-      return sendJson(res, { datasets });
+    if (method === 'GET' && (urlObj.pathname === '/api/datasets' || urlObj.pathname === '/api/projects')) {
+      return sendJson(res, { projects });
     }
 
-    if (method === 'POST' && url === '/api/analyze') {
+    if (method === 'POST' && urlObj.pathname === '/api/analyze') {
       try {
         const body = (await parseJsonBody(req)) as { source?: string };
         const source = body?.source;
@@ -134,7 +170,7 @@ export async function createApp(): Promise<void> {
       }
     }
 
-    if (method === 'POST' && url === '/api/list-data') {
+    if (method === 'POST' && urlObj.pathname === '/api/list-data') {
       try {
         const body = (await parseJsonBody(req)) as { source?: string; id?: string; name?: string };
         const source = body?.source;
@@ -142,16 +178,15 @@ export async function createApp(): Promise<void> {
           return sendJson(res, { error: 'Missing or invalid source' }, 400);
         }
         const sourceDir = resolveSource(source);
-        const result = await analyzer.analyze(sourceDir);
-        const listData = getListData(result);
-        return sendJson(res, listData);
+        createNdjsonStream(res, onProgress => analyzer.analyze(sourceDir, onProgress), getListData);
+        return;
       } catch (err) {
         console.error('List data error:', err);
         return sendJson(res, { error: String(err) }, 500);
       }
     }
 
-    if (method === 'POST' && url === '/api/graph-data') {
+    if (method === 'POST' && urlObj.pathname === '/api/graph-data') {
       try {
         const body = (await parseJsonBody(req)) as { source?: string; id?: string; name?: string };
         const source = body?.source;
@@ -160,7 +195,7 @@ export async function createApp(): Promise<void> {
         }
         const sourceDir = resolveSource(source);
         const result = await analyzer.analyze(sourceDir);
-        const id = body.id || 'dataset';
+        const id = body.id || 'project';
         const name = body.name || id;
         const graphData = getGraphData(result, id, name);
         return sendJson(res, graphData);
@@ -170,29 +205,50 @@ export async function createApp(): Promise<void> {
       }
     }
 
-    if (method === 'GET' && (url === '/' || url === '/index.html')) {
-      const datasetsForIndex = datasets.map(d => ({
-        id: d.id,
-        name: d.name,
-        source: d.source,
+    if (method === 'GET' && (urlObj.pathname === '/' || urlObj.pathname === '/index.html')) {
+      const projectsForIndex = projects.map(p => ({
+        id: p.id,
+        name: p.name,
+        source: p.source,
         components: 0,
         dependencies: 0,
       }));
-      const html = indexGenerator.generateHtml(datasetsForIndex);
+      const html = indexGenerator.generateHtml(projectsForIndex);
       return sendHtml(res, html);
     }
 
-    if (method === 'GET' && url === '/list.html') {
-      const listHtml = simpleViz.generateShell ? simpleViz.generateShell() : getListShell();
-      return sendHtml(res, listHtml);
+    if (method === 'GET' && urlObj.pathname === '/list.html') {
+      return sendHtml(res, getListShell());
     }
 
-    if (method === 'GET' && url === '/graph.html') {
-      const graphHtml = getGraphShell();
-      return sendHtml(res, graphHtml);
+    if (method === 'GET' && urlObj.pathname === '/graph.html') {
+      return sendHtml(res, getGraphShell());
     }
 
-    const filePath = join(OUTPUT_DIR, url === '/' ? 'index.html' : url.replace(/^\//, ''));
+    if (method === 'POST' && urlObj.pathname === '/api/render-graph') {
+      try {
+        const body = (await parseJsonBody(req)) as { source?: string; id?: string; name?: string };
+        const source = body?.source;
+        if (!source || typeof source !== 'string') {
+          return sendHtml(res, '<!DOCTYPE html><html><body><h1>Error</h1><p>Missing source</p></body></html>', 400);
+        }
+        const sourceDir = resolveSource(source);
+        const id = body.id || 'project';
+        const name = body.name || id;
+        createNdjsonStream(
+          res,
+          onProgress => analyzer.analyze(sourceDir, onProgress),
+          result => ({ html: graphViz.generateHtmlForProject(result, id, name) })
+        );
+        return;
+      } catch (err) {
+        console.error('Graph render error:', err);
+        return sendHtml(res, '<!DOCTYPE html><html><body><h1>Error</h1><p>' + String(err) + '</p></body></html>', 500);
+      }
+    }
+
+    const pathname = urlObj.pathname;
+    const filePath = join(OUTPUT_DIR, pathname === '/' ? 'index.html' : pathname.replace(/^\//, '').split('?')[0]);
     if (existsSync(filePath) && !filePath.includes('..')) {
       const content = readFileSync(filePath, 'utf-8');
       const contentType = filePath.endsWith('.html') ? 'text/html' : filePath.endsWith('.css') ? 'text/css' : 'application/javascript';
@@ -205,7 +261,7 @@ export async function createApp(): Promise<void> {
     res.end('Not found');
   });
 
-  const port = 3456;
+  const port = Number(process.env.PORT) || 3456;
   server.listen(port, () => {
     console.log(`🚀 Kairo server running at http://localhost:${port}`);
     console.log(`   Homepage: http://localhost:${port}/`);

@@ -1,0 +1,6 @@
+{
+  "projects": [
+    {"id": "kairo", "name": "Kairo test-data", "source": "./test-data/main/default"},
+    {"id": "caixabank", "name": "CaixaBank force-app", "source": "/Users/marcpla/Documents/Projectes/CaixaBank/force-app/main/default"}
+  ]
+}

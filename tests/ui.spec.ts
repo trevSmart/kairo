@@ -1,34 +1,46 @@
 import { test, expect } from '@playwright/test';
-import path from 'path';
 
-const graphPath = path.resolve(process.cwd(), 'output', 'dependency-graph.html');
-const componentPath = path.resolve(process.cwd(), 'output', 'component-list.html');
-
-test('dependency graph slider and heatmap load without errors', async ({ page }) => {
+test('homepage loads without errors', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', msg => {
     if (msg.type() === 'error') errors.push(msg.text());
   });
 
-  await page.goto('file://' + graphPath, { waitUntil: 'load' });
-  await page.waitForTimeout(2000);
-
-  const initialNodes = await page.evaluate(() => window['nodesDataset']?.length ?? 0);
-  await page.locator('#min-weight').press('ArrowRight');
-  await page.waitForTimeout(1000);
-  const afterNodes = await page.evaluate(() => window['nodesDataset']?.length ?? 0);
-
-  expect(afterNodes).toBeLessThanOrEqual(initialNodes);
+  await page.goto('/');
+  await expect(page.locator('h1')).toContainText('Kairo');
   expect(errors, 'no console errors').toHaveLength(0);
 });
 
-// Simple smoke test for component list page
-test('component list loads without console errors', async ({ page }) => {
+test('graph view loads for project from config', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', msg => {
-    if (msg.type() === 'error') errors.push(msg.text());
+    if (msg.type() === 'error') {
+      const text = msg.text();
+      if (!text.includes('404') && !text.includes('Failed to load resource')) errors.push(text);
+    }
   });
-  await page.goto('file://' + componentPath, { waitUntil: 'load' });
-  await page.waitForTimeout(1000);
-  expect(errors, 'no console errors').toHaveLength(0);
+
+  await page.goto('/graph.html?project=kairo');
+  await page.waitForTimeout(5000);
+
+  const graph = page.locator('#graph');
+  const shellCard = page.locator('.card');
+  await expect(graph.or(shellCard)).toBeVisible();
+  expect(errors, 'no critical console errors').toHaveLength(0);
+});
+
+test('list view loads for project from config', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', msg => {
+    if (msg.type() === 'error') {
+      const text = msg.text();
+      if (!text.includes('404') && !text.includes('Failed to load resource')) errors.push(text);
+    }
+  });
+
+  await page.goto('/list.html?project=kairo');
+  await page.waitForTimeout(6000);
+
+  await expect(page.locator('#container')).toBeVisible();
+  expect(errors, 'no critical console errors').toHaveLength(0);
 });

@@ -8,13 +8,4 @@ script = ""
 [[actions]]
 name = "Run"
 icon = "run"
-command = '''
-npm run build
-npm run analyze
-open "file:///Users/marcpla/Documents/Projectes/kairo/output/dependency-graph.html"
-'''
-
-[[actions]]
-name = "watch"
-icon = "debug"
-command = "npm run watch"
+command = "npm start"

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Kairo - Graph view</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { background: white; border-radius: 16px; padding: 48px; text-align: center; max-width: 400px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+    h1 { margin: 0 0 16px 0; color: #333; }
+    p { color: #666; margin-bottom: 24px; line-height: 1.6; }
+    a { color: #667eea; font-weight: 600; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .projects { text-align: left; margin-top: 20px; }
+    .projects a { display: block; padding: 12px; margin: 8px 0; background: #f5f5f5; border-radius: 8px; color: #333; }
+    .projects a:hover { background: #eee; }
+    .loading { font-size: 18px; color: #666; }
+    .progress-bar-wrap { width: 100%; max-width: 280px; height: 10px; background: #e0e0e0; border-radius: 5px; overflow: hidden; margin: 16px auto; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 5px; transition: width 0.15s ease-out; }
+    .progress-text { font-size: 13px; color: #888; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="content">
+      <h1>🕸️ Graph view</h1>
+      <p>Selecciona un projecte Salesforce per visualitzar el graf de dependencies. L'anàlisi es farà en obrir el graf.</p>
+      <a href="./">← Tornar a la homepage</a>
+      <div class="projects" id="projects"></div>
+    </div>
+    <div id="loading-msg" class="loading" style="display: none;">
+      <span>Analitzant projecte Salesforce…</span>
+      <div class="progress-bar-wrap"><div id="progress-fill" class="progress-bar-fill" style="width: 0%;"></div></div>
+      <div id="progress-text" class="progress-text">0 / 0 fitxers</div>
+    </div>
+  </div>
+  <script>
+    const STORAGE_KEY = 'kairo-projects';
+
+    function getProjects() {
+      try {
+        let stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) {
+          const legacy = localStorage.getItem('kairo-datasets');
+          if (legacy) {
+            localStorage.setItem(STORAGE_KEY, legacy);
+            localStorage.removeItem('kairo-datasets');
+            stored = legacy;
+          }
+        }
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return Array.isArray(parsed) ? parsed : [];
+        }
+      } catch (e) {}
+      return [];
+    }
+
+    async function loadFromProject(project) {
+      if (!project?.source) return false;
+      document.getElementById('content').style.display = 'none';
+      document.getElementById('loading-msg').style.display = 'block';
+      try {
+        const res = await fetch('/api/render-graph', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: project.source, id: project.id, name: project.name || project.id })
+        });
+        if (!res.ok) throw new Error('Error ' + res.status);
+        let html = null;
+        if (res.headers.get('Content-Type')?.includes('application/x-ndjson')) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const obj = JSON.parse(line);
+                if (obj.progress) {
+                  const pct = obj.progress.total > 0 ? Math.round(100 * obj.progress.processed / obj.progress.total) : 0;
+                  const fill = document.getElementById('progress-fill');
+                  const text = document.getElementById('progress-text');
+                  if (fill) fill.style.width = pct + '%';
+                  if (text) text.textContent = obj.progress.processed + ' / ' + obj.progress.total + ' fitxers';
+                  await new Promise(r => setTimeout(r, 0));
+                } else if (obj.result?.html) {
+                  html = obj.result.html;
+                } else if (obj.error) {
+                  throw new Error(obj.error);
+                }
+              } catch (e) {
+                if (e instanceof SyntaxError) continue;
+                throw e;
+              }
+            }
+          }
+        } else {
+          html = await res.text();
+        }
+        if (html) {
+          document.open();
+          document.write(html);
+          document.close();
+          return true;
+        }
+      } catch (e) {}
+      document.getElementById('content').style.display = 'block';
+      document.getElementById('loading-msg').style.display = 'none';
+      return false;
+    }
+
+    async function load() {
+      const params = new URLSearchParams(location.search);
+      const projectId = params.get('project') || params.get('dataset');
+
+      if (projectId) {
+        const local = getProjects();
+        let project = local.find(p => p.id === projectId);
+        if (!project || !project.source) {
+          const res = await fetch('/api/projects');
+          const data = await res.json();
+          const apiProjects = data.projects || data.datasets || [];
+          project = apiProjects.find(p => p.id === projectId);
+        }
+        if (project?.source) {
+          const ok = await loadFromProject(project);
+          if (ok) return;
+        }
+      }
+
+      try {
+        const res = await fetch('/api/projects');
+        const data = await res.json();
+        const apiProjects = data.projects || data.datasets || [];
+        const local = getProjects();
+        const merged = local.length ? local : apiProjects.map(p => ({ ...p, components: 0, dependencies: 0 }));
+
+        const list = document.getElementById('projects');
+        if (merged.length) {
+          list.innerHTML = '<p style="margin-top: 20px;">Projectes Salesforce disponibles:</p>' +
+            merged.map(p => '<a href="graph.html?project=' + encodeURIComponent(p.id) + '">' + (p.name || p.id) + '</a>').join('');
+        } else {
+          list.innerHTML = '<p style="margin-top: 20px; color: #888;">No hi ha projectes. <a href="./">Afegeix-ne un des de la homepage</a>.</p>';
+        }
+      } catch (e) {
+        document.getElementById('projects').innerHTML = '<p style="color: #dc2626;">Error carregant projectes.</p>';
+      }
+    }
+    load();
+  </script>
+</body>
+</html>
