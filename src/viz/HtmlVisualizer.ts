@@ -365,6 +365,26 @@ export class HtmlVisualizer {
     return { nodes, edges };
   }
 
+  /** Build graph payload for a single dataset (for API use). */
+  buildGraphPayload(
+    result: AnalysisResult,
+    id: string,
+    name: string
+  ): {
+    id: string;
+    name: string;
+    stats: AnalysisResult['stats'];
+    nodes: NodeInput[];
+    visNodes: VisNode[];
+    visEdges: VisEdge[];
+    recommended: { minWeight: number; minConnections: number };
+  } {
+    const { nodes, edges } = this.buildNodesAndEdges(result);
+    const { visNodes, visEdges } = buildVisData(nodes, edges);
+    const recommended = computeRecommendedFilters(edges);
+    return { id, name, stats: result.stats, nodes, visNodes, visEdges, recommended };
+  }
+
   generate(
     datasets: Array<{ id: string; name: string; result: AnalysisResult }>,
     outputPath: string

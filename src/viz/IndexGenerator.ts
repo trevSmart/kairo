@@ -2,11 +2,13 @@ import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname } from 'path';
 import type { AnalysisResult } from '../types.js';
 
-type DatasetInput = {
+export type DatasetInput = {
   id: string;
   name: string;
   source: string;
-  result: AnalysisResult;
+  result?: AnalysisResult;
+  components?: number;
+  dependencies?: number;
 };
 
 export class IndexGenerator {
@@ -19,12 +21,14 @@ export class IndexGenerator {
   }
 
   private generateHtml(datasets: DatasetInput[]): string {
-    const totalComponents = datasets.reduce((s, d) => s + d.result.stats.totalComponents, 0);
-    const totalDeps = datasets.reduce((s, d) => s + d.result.stats.totalDependencies, 0);
+    const getComponents = (d: DatasetInput) => d.result?.stats.totalComponents ?? d.components ?? 0;
+    const getDeps = (d: DatasetInput) => d.result?.stats.totalDependencies ?? d.dependencies ?? 0;
+    const totalComponents = datasets.reduce((s, d) => s + getComponents(d), 0);
+    const totalDeps = datasets.reduce((s, d) => s + getDeps(d), 0);
     const datasetList =
       datasets.length > 0
         ? datasets
-            .map((d) => `${d.name} (${d.result.stats.totalComponents} components)`)
+            .map((d) => `${d.name} (${getComponents(d)} components)`)
             .join(', ')
         : '';
     const graphDescription =
@@ -40,8 +44,8 @@ export class IndexGenerator {
         id: d.id,
         name: d.name,
         source: d.source,
-        components: d.result.stats.totalComponents,
-        dependencies: d.result.stats.totalDependencies,
+        components: getComponents(d),
+        dependencies: getDeps(d),
       }))
     );
     return `<!DOCTYPE html>
@@ -128,11 +132,11 @@ export class IndexGenerator {
         </div>
         <button type="button" class="btn btn-primary" id="btn-add">Crear</button>
       </div>
-      <p class="refresh-hint">Per re-analitzar: <code>npm run analyze</code>. Per persistir canvis a config: actualitza <code>config/datasets.json</code>.</p>
+      <p class="refresh-hint">L'anàlisi es genera quan obres la list view o graph view d'un dataset. Per persistir canvis: actualitza <code>config/datasets.json</code>.</p>
     </div>
 
     <div class="views-grid">
-      ${datasets.length > 0 ? `<a href="component-list.html" class="view-card">
+      ${datasets.length > 0 ? `<a href="list.html" class="view-card">
         <div class="view-icon">📋</div>
         <div class="view-title">List view</div>
         <div class="view-description">
@@ -140,7 +144,7 @@ export class IndexGenerator {
         </div>
       </a>
       ` : ''}
-      <a href="dependency-graph.html" class="view-card">
+      <a href="graph.html" class="view-card">
         <div class="view-icon">🕸️</div>
         <div class="view-title">Graph view</div>
         <div class="view-description">
@@ -213,6 +217,8 @@ export class IndexGenerator {
             <div class="dataset-stats">\${(d.components || 0).toLocaleString()} components\${d.dependencies !== undefined ? ', ' + d.dependencies.toLocaleString() + ' deps' : ''}</div>
           </div>
           <div class="dataset-actions">
+            <a href="list.html?dataset=\${encodeURIComponent(d.id)}" class="btn btn-primary btn-sm" title="List view">📋</a>
+            <a href="graph.html?dataset=\${encodeURIComponent(d.id)}" class="btn btn-primary btn-sm" title="Graph view">🕸️</a>
             <button type="button" class="btn btn-secondary btn-sm" data-action="rename" title="Renombrar">✎</button>
             <button type="button" class="btn btn-danger btn-sm" data-action="delete" title="Eliminar">✕</button>
           </div>
