@@ -15,6 +15,6 @@ open "file:///Users/marcpla/Documents/Projectes/kairo/output/dependency-graph.ht
 '''
 
 [[actions]]
-name = "analyze"
-icon = "tool"
-command = "npm run analyze"
+name = "watch"
+icon = "debug"
+command = "npm run watch"

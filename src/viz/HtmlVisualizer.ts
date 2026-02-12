@@ -267,10 +267,10 @@ function buildVisData(
       title: String(node.label || node.name || node.id || node.type || ''),
       color: hasIcon
         ? {
-            background: '#ffffff',
+            background: 'transparent',
             border: baseHex,
-            highlight: { background: '#ffffff', border: baseHex },
-            hover: { background: '#f5f5f5', border: baseHex },
+            highlight: { background: 'transparent', border: baseHex },
+            hover: { background: 'transparent', border: baseHex },
           }
         : nodeColor,
       font: { size: 12, color: '#ffffff' },
@@ -429,39 +429,41 @@ export class HtmlVisualizer {
     .stat { display: flex; align-items: center; gap: 6px; }
     .stat-value { font-size: 20px; font-weight: bold; }
     #graph { flex: 1; background: #000; position: relative; min-height: 0; transform: translateZ(0); }
-    .empty-state { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.95); font-size: 18px; color: #999; text-align: center; padding: 40px; }
     #heatmap {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
       pointer-events: none;
-      opacity: 0.7;
+      opacity: 0.85;
       mix-blend-mode: screen;
+      z-index: 2;
     }
+    .empty-state { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.95); font-size: 18px; color: #999; text-align: center; padding: 40px; }
     #controls { position: absolute; top: 100px; left: 20px; background: rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 0px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 280px; max-height: calc(100vh - 130px); overflow-y: auto; touch-action: none; user-select: none; z-index: 1000; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
     #controls-header { background: linear-gradient(135deg, #667eea 0%, #5568d3 100%); color: white; padding: 10px; border-radius: 8px 8px 0 0; cursor: move; font-weight: 600; font-size: 13px; display: flex; justify-content: space-between; align-items: center; touch-action: none; }
     #controls-content { padding: 10px; overflow-y: auto; max-height: calc(100vh - 160px); }
     .control-section { margin-bottom: 7px; }
     .control-section:has(> .compact-slider-row) { background: transparent; }
-    .control-label { font-weight: 600; margin-bottom: 4px; display: block; font-size: 12px; color: #333; }
+    .control-label { font-weight: 600; margin-bottom: 4px; display: block; font-size: 12px; color: #fff; }
     .control-inline { display: flex; gap: 6px; align-items: center; margin-top: 8px; justify-content: flex-end; }
     .control-inline button { margin-top: 0; flex: 0 1 auto; }
     .compact-options-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; }
     .compact-slider-row {
       margin-bottom: 14px;
-      background: white;
       border-radius: 10px;
       padding: 12px;
-      box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.1);
     }
     .compact-slider-row:last-child { margin-bottom: 0; }
-    .slider-wrapper {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 8px;
+    .slider-track-area {
       position: relative;
+      margin-top: 8px;
+      overflow: visible;
+    }
+    .slider-track-area input[type="range"] {
+      display: block;
+      width: 100%;
+      height: 20px;
     }
     .sliderValue {
       position: relative;
@@ -470,52 +472,43 @@ export class HtmlVisualizer {
       overflow: visible;
     }
     .sliderValue span {
+      display: block;
       position: absolute;
-      height: 38px;
-      width: 38px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transform: translateX(-50%) scale(0);
-      font-weight: 600;
-      top: -60px;
-      left: 50%;
-      z-index: 1000;
+      height: 34px;
+      width: 34px;
+      font-weight: 500;
+      top: -30px;
+      line-height: 42px;
+      text-align: center;
+      z-index: 100;
       color: #fff;
-      transform-origin: bottom;
-      transition: transform 0.3s ease-in-out;
-      font-size: 12px;
+      font-size: 10px;
       pointer-events: none;
+      transform: translateX(-70%) scale(0);
+      transform-origin: bottom;
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+      will-change: transform, opacity;
     }
     .sliderValue span.show {
-      transform: translateX(-50%) scale(1);
+      opacity: 1;
+      transform: translateX(-70%) scale(1);
     }
-    .sliderValue span:after {
+    .compact-slider-row { overflow: visible; }
+    .sliderValue span::after {
       position: absolute;
       content: '';
-      height: 38px;
-      width: 38px;
+      height: 100%;
+      width: 100%;
       background: #664AFF;
       border: 2px solid #fff;
       z-index: -1;
-      top: 0;
       left: 50%;
-      margin-left: -19px;
-      transform: rotate(45deg);
+      transform: translateX(-50%) rotate(45deg);
       border-bottom-left-radius: 50%;
       border-top-left-radius: 50%;
       border-top-right-radius: 50%;
-      box-shadow: 0px 2px 8px rgba(102, 74, 255, 0.4);
-    }
-    .slider-value {
-      font-weight: 700;
-      color: #664AFF;
-      font-size: 12px;
-      min-width: 24px;
-      text-align: right;
-      padding: 4px 8px;
-      background: rgba(102, 74, 255, 0.1);
-      border-radius: 4px;
+      box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.1);
     }
     .slider-scale { display: flex; justify-content: space-between; font-size: 10px; color: #999; margin-top: 2px; }
     .slider-help { font-size: 10px; color: #999; margin-top: 4px; line-height: 1.2; }
@@ -536,66 +529,52 @@ export class HtmlVisualizer {
     input[type="text"] { width: 100%; padding: 4px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; font-size: 12px; background: rgba(0, 0, 0, 0.3); color: #ffffff; box-sizing: border-box; }
     input[type="text"]::placeholder { color: rgba(255, 255, 255, 0.6); }
     input[type="range"] {
-      width: 100%;
       -webkit-appearance: none;
       appearance: none;
+      width: 100%;
+      height: 16px;
       background: transparent;
+      border-radius: 999px;
+      outline: none;
+      border: none;
       cursor: pointer;
-      flex: 1;
     }
     input[type="range"]::-webkit-slider-runnable-track {
-      width: 100%;
-      height: 3px;
-      background: #ddd;
-      border-radius: 5px;
+      height: 2px;
+      background: linear-gradient(90deg, #c9d0f0 0%, #d7dbee 100%);
+      border-radius: 999px;
+    }
+    input[type="range"]::-moz-range-track {
+      height: 2px;
+      background: linear-gradient(90deg, #c9d0f0 0%, #d7dbee 100%);
+      border-radius: 999px;
     }
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      appearance: none;
-      width: 20px;
-      height: 20px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
       background: #664AFF;
       border: 1px solid #664AFF;
       cursor: pointer;
-      box-shadow: 0px 0px 8px rgba(102, 74, 255, 0.4);
-      margin-top: -8.5px;
-      transition: all 0.2s ease;
+      margin-top: -5px;
     }
-    input[type="range"]::-webkit-slider-thumb:hover {
-      box-shadow: 0px 0px 12px rgba(102, 74, 255, 0.6);
-      transform: scale(1.1);
-    }
-    input[type="range"]::-moz-range-track {
-      background: #ddd;
-      height: 3px;
-      border: none;
-      border-radius: 5px;
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #664AFF;
+      border: 1px solid #664AFF;
+      cursor: pointer;
     }
     input[type="range"]::-moz-range-progress {
       background: #664AFF;
-      height: 3px;
-      border-radius: 5px;
-    }
-    input[type="range"]::-moz-range-thumb {
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #664AFF;
-      border: 1px solid #664AFF;
-      cursor: pointer;
-      box-shadow: 0px 0px 8px rgba(102, 74, 255, 0.4);
-      transition: all 0.2s ease;
-    }
-    input[type="range"]::-moz-range-thumb:hover {
-      box-shadow: 0px 0px 12px rgba(102, 74, 255, 0.6);
-      transform: scale(1.1);
     }
     select { background: rgba(0, 0, 0, 0.3); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 6px; font-size: 12px; }
     select option { background: #333; color: #ffffff; }
     button { width: 100%; padding: 6px 8px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 6px; }
     button:hover { background: #5568d3; }
-    #info-panel { position: absolute; top: 100px; right: 20px; background: rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); max-width: 300px; display: none; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+    #info-panel { position: absolute; top: 100px; right: 20px; background: transparent; border-radius: 8px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); max-width: 300px; display: none; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
     #info-panel.visible { display: block; }
     .info-title-wrapper { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .info-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: rgba(102, 126, 234, 0.15); border: 2px solid #667eea; border-radius: 8px; }
@@ -679,32 +658,23 @@ export class HtmlVisualizer {
     <div class="control-section">
       <div class="compact-slider-row">
         <label class="control-label" for="min-connections">Min Connections</label>
-        <div class="slider-wrapper">
-          <div class="sliderValue" id="connections-tooltip">
-            <span>${recommended.minConnections}</span>
-          </div>
+        <div class="slider-track-area">
+          <div class="sliderValue"><span>${recommended.minConnections}</span></div>
           <input type="range" id="min-connections" min="0" max="20" value="${recommended.minConnections}" oninput="filterByConnections(this.value)">
-          <span class="slider-value" id="connections-value">${recommended.minConnections}</span>
         </div>
       </div>
       <div class="compact-slider-row">
         <label class="control-label" for="min-members">Min Island Size</label>
-        <div class="slider-wrapper">
-          <div class="sliderValue" id="members-tooltip">
-            <span>3</span>
-          </div>
+        <div class="slider-track-area">
+          <div class="sliderValue"><span>3</span></div>
           <input type="range" id="min-members" min="1" max="50" value="3" oninput="filterByMembers(this.value)">
-          <span class="slider-value" id="members-value">3</span>
         </div>
       </div>
       <div class="compact-slider-row">
         <label class="control-label" for="min-weight">Dependency Weight</label>
-        <div class="slider-wrapper">
-          <div class="sliderValue" id="weight-tooltip">
-            <span>3</span>
-          </div>
+        <div class="slider-track-area">
+          <div class="sliderValue"><span>3</span></div>
           <input type="range" id="min-weight" min="0" max="10" value="3" oninput="filterByWeight(this.value)">
-          <span class="slider-value" id="weight-value">3</span>
         </div>
         <div class="slider-scale">
           <span>All</span>
@@ -714,22 +684,16 @@ export class HtmlVisualizer {
       </div>
       <div class="compact-slider-row">
         <label class="control-label" for="weak-threshold">Threshold</label>
-        <div class="slider-wrapper">
-          <div class="sliderValue" id="threshold-tooltip">
-            <span>3.5</span>
-          </div>
+        <div class="slider-track-area">
+          <div class="sliderValue"><span>3.5</span></div>
           <input type="range" id="weak-threshold" min="1" max="10" value="3.5" step="0.5" onchange="updatePhysics()">
-          <span class="slider-value" id="weak-threshold-value">3.5</span>
         </div>
       </div>
       <div class="compact-slider-row">
         <label class="control-label" for="weak-repulsion">Repulsion</label>
-        <div class="slider-wrapper">
-          <div class="sliderValue" id="repulsion-tooltip">
-            <span>40</span>
-          </div>
+        <div class="slider-track-area">
+          <div class="sliderValue"><span>40</span></div>
           <input type="range" id="weak-repulsion" min="1" max="50" value="40" step="0.5" onchange="updatePhysics()">
-          <span class="slider-value" id="weak-repulsion-value">40</span>
         </div>
       </div>
     </div>
@@ -749,6 +713,8 @@ export class HtmlVisualizer {
   <div class="legend">
     <div class="legend-header">📕 Legend<span id="legend-toggle" style="cursor: pointer; font-size: 16px;">−</span></div>
     <div class="legend-content">
+      <div class="legend-title">Zoom</div>
+      <div class="legend-item">Scale: <span id="legend-zoom-value">1.00</span></div>
       <div class="legend-title">Component Types</div>
       <div class="legend-item">
         <div class="legend-color" style="background: #DA70D6;"></div>
@@ -969,6 +935,7 @@ export class HtmlVisualizer {
       physics: { enabled: true, barnesHut: { gravitationalConstant: -5000, centralGravity: 0.03, springLength: 150, springConstant: 0.005, avoidOverlap: 0.5, damping: 0.5 }, stabilization: { enabled: true, iterations: 500 }, solver: 'barnesHut' },
       nodes: { shape: 'dot', font: { size: 12, color: '#ffffff' }, borderWidth: 2, shapeProperties: { borderDashes: false } },
       edges: { width: 1, smooth: { enabled: false }, arrows: { to: { enabled: true, scaleFactor: 0.5 } } },
+      interaction: { tooltipDelay: 0 },
     };
     const network = new vis.Network(container, data, options);
 
@@ -977,10 +944,21 @@ export class HtmlVisualizer {
     heatmapCanvas.id = 'heatmap';
     container.appendChild(heatmapCanvas);
     const heatmapCtx = heatmapCanvas.getContext('2d');
+
     let heatmapNodes = nodesDataset.get();
     let heatmapMaxSize = Math.max(1, ...heatmapNodes.map(n => n.size || 1));
     let heatmapScheduled = false;
-    let heatmapLastDraw = 0;
+    let heatmapLastCompute = 0;
+    let heatmapGrid = new Float32Array(0);
+    const HEATMAP_CELL_PX = 18;
+    let heatmapGridCols = 0;
+    let heatmapGridRows = 0;
+    let heatmapCellW = 0;
+    let heatmapCellH = 0;
+    let heatmapMax = 1;
+    let heatmapWidth = 0;
+    let heatmapHeight = 0;
+    let heatmapDpr = 1;
 
     function refreshHeatmapCache() {
       heatmapNodes = nodesDataset.get();
@@ -988,75 +966,123 @@ export class HtmlVisualizer {
       scheduleHeatmap(true);
     }
 
-    function resizeHeatmapCanvas() {
+    function resizeHeatmapBounds() {
       const rect = container.getBoundingClientRect();
-      heatmapCanvas.width = Math.max(1, Math.floor(rect.width));
-      heatmapCanvas.height = Math.max(1, Math.floor(rect.height));
+      heatmapWidth = Math.max(1, rect.width);
+      heatmapHeight = Math.max(1, rect.height);
+      heatmapDpr = window.devicePixelRatio || 1;
+      if (heatmapCanvas) {
+        heatmapCanvas.width = Math.max(1, Math.floor(heatmapWidth * heatmapDpr));
+        heatmapCanvas.height = Math.max(1, Math.floor(heatmapHeight * heatmapDpr));
+        heatmapCanvas.style.width = heatmapWidth + 'px';
+        heatmapCanvas.style.height = heatmapHeight + 'px';
+      }
+      if (heatmapCtx) heatmapCtx.setTransform(heatmapDpr, 0, 0, heatmapDpr, 0, 0);
     }
 
     function scheduleHeatmap(force = false) {
       const now = performance.now();
-      if (!force && now - heatmapLastDraw < 200) return;
+      if (!force && now - heatmapLastCompute < 200) return;
       if (heatmapScheduled) return;
       heatmapScheduled = true;
       requestAnimationFrame(() => {
         heatmapScheduled = false;
-        drawHeatmap();
+        drawHeatmap(force);
       });
     }
 
-    function drawHeatmap() {
-      if (!heatmapCtx) return;
-      resizeHeatmapCanvas();
+    function computeHeatmap() {
+      resizeHeatmapBounds();
 
-      const width = heatmapCanvas.width;
-      const height = heatmapCanvas.height;
-      const gridSize = 90; // finer grid for sharper heat tiles
-      const cellW = width / gridSize;
-      const cellH = height / gridSize;
-      const grid = new Float32Array(gridSize * gridSize);
+      const width = heatmapWidth;
+      const height = heatmapHeight;
+      heatmapGridCols = Math.max(1, Math.ceil(width / HEATMAP_CELL_PX));
+      heatmapGridRows = Math.max(1, Math.ceil(height / HEATMAP_CELL_PX));
+      heatmapCellW = width / heatmapGridCols;
+      heatmapCellH = height / heatmapGridRows;
+      const grid = new Float32Array(heatmapGridCols * heatmapGridRows);
 
       const positions = network.getPositions(heatmapNodes.map(n => n.id));
+      const scale = network.getScale();
       for (const node of heatmapNodes) {
         const pos = positions[node.id];
         if (!pos) continue;
         const dom = network.canvasToDOM(pos);
         const size = node.size || 10;
         const intensity = Math.min(3, 0.5 + size / heatmapMaxSize);
-        const gx = Math.max(0, Math.min(gridSize - 1, Math.floor(dom.x / cellW)));
-        const gy = Math.max(0, Math.min(gridSize - 1, Math.floor(dom.y / cellH)));
-        const idx = gy * gridSize + gx;
-        grid[idx] += intensity;
-        // Light smoothing to neighbors (cheap)
-        if (gx + 1 < gridSize) grid[idx + 1] += intensity * 0.4;
-        if (gy + 1 < gridSize) grid[idx + gridSize] += intensity * 0.4;
-        if (gx > 0) grid[idx - 1] += intensity * 0.4;
-        if (gy > 0) grid[idx - gridSize] += intensity * 0.4;
+        const radius = Math.max(2, size * scale);
+        const minX = Math.max(0, Math.floor((dom.x - radius) / heatmapCellW));
+        const maxX = Math.min(heatmapGridCols - 1, Math.floor((dom.x + radius) / heatmapCellW));
+        const minY = Math.max(0, Math.floor((dom.y - radius) / heatmapCellH));
+        const maxY = Math.min(heatmapGridRows - 1, Math.floor((dom.y + radius) / heatmapCellH));
+
+        for (let y = minY; y <= maxY; y++) {
+          const y0 = y * heatmapCellH;
+          const y1 = y0 + heatmapCellH;
+          const dy = dom.y < y0 ? y0 - dom.y : (dom.y > y1 ? dom.y - y1 : 0);
+          for (let x = minX; x <= maxX; x++) {
+            const x0 = x * heatmapCellW;
+            const x1 = x0 + heatmapCellW;
+            const dx = dom.x < x0 ? x0 - dom.x : (dom.x > x1 ? dom.x - x1 : 0);
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > radius) continue;
+            const falloff = 1 - dist / radius;
+            const idx = y * heatmapGridCols + x;
+            grid[idx] += intensity * (0.4 + 0.6 * falloff);
+          }
+        }
       }
 
       let max = 0;
       for (let i = 0; i < grid.length; i++) {
         if (grid[i] > max) max = grid[i];
       }
-      max = Math.max(1, max);
+      heatmapMax = Math.max(1, max);
+      heatmapGrid = grid;
+      heatmapLastCompute = performance.now();
+    }
 
-      heatmapCtx.clearRect(0, 0, width, height);
-      for (let y = 0; y < gridSize; y++) {
-        for (let x = 0; x < gridSize; x++) {
-          const value = grid[y * gridSize + x];
+    function drawHeatmap(force = false) {
+      if (!heatmapCtx) return;
+      if (force || performance.now() - heatmapLastCompute > 200) computeHeatmap();
+      if (!heatmapGrid.length) return;
+      heatmapCtx.save();
+      heatmapCtx.globalCompositeOperation = 'source-over';
+      heatmapCtx.globalAlpha = 0.85;
+      heatmapCtx.clearRect(0, 0, heatmapWidth, heatmapHeight);
+      for (let y = 0; y < heatmapGridRows; y++) {
+        for (let x = 0; x < heatmapGridCols; x++) {
+          const value = heatmapGrid[y * heatmapGridCols + x];
           if (value <= 0) continue;
-          const alpha = Math.min(0.6, value / max);
-          heatmapCtx.fillStyle = 'rgba(156, 39, 176, ' + alpha.toFixed(3) + ')';
-          heatmapCtx.fillRect(x * cellW, y * cellH, cellW + 0.5, cellH + 0.5);
+          const alpha = Math.min(0.9, value / heatmapMax);
+          heatmapCtx.fillStyle = 'rgba(255, 64, 129, ' + alpha.toFixed(3) + ')';
+          heatmapCtx.fillRect(x * heatmapCellW, y * heatmapCellH, heatmapCellW + 0.5, heatmapCellH + 0.5);
         }
       }
-
-      heatmapLastDraw = performance.now();
+      // Grid overlay
+      heatmapCtx.globalAlpha = 0.25;
+      heatmapCtx.strokeStyle = 'rgba(255, 64, 129, 0.35)';
+      heatmapCtx.lineWidth = 1;
+      for (let x = 0; x <= heatmapGridCols; x++) {
+        const px = Math.round(x * heatmapCellW) + 0.5;
+        heatmapCtx.beginPath();
+        heatmapCtx.moveTo(px, 0);
+        heatmapCtx.lineTo(px, heatmapHeight);
+        heatmapCtx.stroke();
+      }
+      for (let y = 0; y <= heatmapGridRows; y++) {
+        const py = Math.round(y * heatmapCellH) + 0.5;
+        heatmapCtx.beginPath();
+        heatmapCtx.moveTo(0, py);
+        heatmapCtx.lineTo(heatmapWidth, py);
+        heatmapCtx.stroke();
+      }
+      heatmapCtx.restore();
     }
 
     window.addEventListener('resize', () => scheduleHeatmap(true));
-    network.on('dragEnd', () => scheduleHeatmap());
-    network.on('zoom', () => scheduleHeatmap());
+    network.on('dragEnd', () => scheduleHeatmap(true));
+    network.on('zoom', () => scheduleHeatmap(true));
     network.on('afterDrawing', () => scheduleHeatmap());
     scheduleHeatmap(true);
 
@@ -1073,8 +1099,17 @@ export class HtmlVisualizer {
       }));
       nodesDataset.update(updates);
     }
-    network.on('zoom', function(params) { updateLabelsForZoom(params.scale); });
-    updateLabelsForZoom(network.getScale());
+    function updateZoomIndicator(scale) {
+      const el = document.getElementById('legend-zoom-value');
+      if (el) el.textContent = scale.toFixed(2);
+    }
+    network.on('zoom', function(params) {
+      updateLabelsForZoom(params.scale);
+      updateZoomIndicator(params.scale);
+    });
+    const initialScale = network.getScale();
+    updateLabelsForZoom(initialScale);
+    updateZoomIndicator(initialScale);
 
     let currentIndex = 0;
     let currentNodes = allDatasets[0].nodes;
@@ -1279,32 +1314,14 @@ export class HtmlVisualizer {
     }
 
     function filterByConnections(val) {
-      document.getElementById('connections-value').textContent = val;
-      const tooltip = document.querySelector('#connections-tooltip span');
-      if (tooltip) {
-        tooltip.textContent = val;
-        tooltip.classList.add('show');
-      }
       applyFilters();
     }
 
     function filterByMembers(val) {
-      document.getElementById('members-value').textContent = val;
-      const tooltip = document.querySelector('#members-tooltip span');
-      if (tooltip) {
-        tooltip.textContent = val;
-        tooltip.classList.add('show');
-      }
       applyFilters();
     }
 
     function filterByWeight(minWeight) {
-      document.getElementById('weight-value').textContent = minWeight;
-      const tooltip = document.querySelector('#weight-tooltip span');
-      if (tooltip) {
-        tooltip.textContent = minWeight;
-        tooltip.classList.add('show');
-      }
       document.getElementById('weight-description').textContent = weightDescription(minWeight);
       applyFilters();
     }
@@ -1314,10 +1331,8 @@ export class HtmlVisualizer {
       const minWeightEl = document.getElementById('min-weight');
       if (minConnEl) minConnEl.value = currentRecommended.minConnections;
       if (minWeightEl) minWeightEl.value = currentRecommended.minWeight;
-      document.getElementById('connections-value').textContent = currentRecommended.minConnections;
       const minMembersEl = document.getElementById('min-members');
       if (minMembersEl) minMembersEl.value = DEFAULT_MIN_MEMBERS;
-      document.getElementById('members-value').textContent = DEFAULT_MIN_MEMBERS;
       filterByWeight(currentRecommended.minWeight);
     }
 
@@ -1325,20 +1340,6 @@ export class HtmlVisualizer {
       const weakThreshold = parseFloat(document.getElementById('weak-threshold').value);
       const weakRepulsion = parseFloat(document.getElementById('weak-repulsion').value);
 
-      document.getElementById('weak-threshold-value').textContent = weakThreshold.toFixed(1);
-      document.getElementById('weak-repulsion-value').textContent = weakRepulsion.toFixed(1);
-
-      const thresholdTooltip = document.querySelector('#threshold-tooltip span');
-      if (thresholdTooltip) {
-        thresholdTooltip.textContent = weakThreshold.toFixed(1);
-        thresholdTooltip.classList.add('show');
-      }
-
-      const repulsionTooltip = document.querySelector('#repulsion-tooltip span');
-      if (repulsionTooltip) {
-        repulsionTooltip.textContent = weakRepulsion.toFixed(1);
-        repulsionTooltip.classList.add('show');
-      }
 
       const updatedEdges = allEdges.map(edge => {
         const weight = edge.weight || 3;
@@ -1381,18 +1382,14 @@ export class HtmlVisualizer {
 
       const minWeightEl = document.getElementById('min-weight');
       if (minWeightEl) minWeightEl.value = currentRecommended.minWeight;
-      document.getElementById('weight-value').textContent = currentRecommended.minWeight;
       document.getElementById('weight-description').textContent = weightDescription(currentRecommended.minWeight);
 
       const weakThresholdEl = document.getElementById('weak-threshold');
       const weakRepulsionEl = document.getElementById('weak-repulsion');
       if (weakThresholdEl) weakThresholdEl.value = 3.5;
       if (weakRepulsionEl) weakRepulsionEl.value = 40;
-      document.getElementById('weak-threshold-value').textContent = '3.5';
-      document.getElementById('weak-repulsion-value').textContent = '40';
 
       document.getElementById('min-connections').value = currentRecommended.minConnections;
-      document.getElementById('connections-value').textContent = currentRecommended.minConnections;
       applyFilters();
       network.fit();
       updatePhysics();
@@ -1421,17 +1418,51 @@ export class HtmlVisualizer {
       if (filtered.length > 0) network.fit({ nodes: Array.from(ids) });
     });
 
-    // Tooltip blur events to hide tooltips
-    const hideTooltip = (tooltipId) => {
-      const tooltip = document.querySelector(tooltipId + ' span');
-      if (tooltip) tooltip.classList.remove('show');
-    };
+    // Animated slider tooltips
+    document.querySelectorAll('.slider-track-area').forEach(area => {
+      const input = area.querySelector('input[type="range"]');
+      const tooltipSpan = area.querySelector('.sliderValue span');
+      if (!input || !tooltipSpan) return;
 
-    document.getElementById('min-connections')?.addEventListener('blur', () => hideTooltip('#connections-tooltip'));
-    document.getElementById('min-members')?.addEventListener('blur', () => hideTooltip('#members-tooltip'));
-    document.getElementById('min-weight')?.addEventListener('blur', () => hideTooltip('#weight-tooltip'));
-    document.getElementById('weak-threshold')?.addEventListener('blur', () => hideTooltip('#threshold-tooltip'));
-    document.getElementById('weak-repulsion')?.addEventListener('blur', () => hideTooltip('#repulsion-tooltip'));
+      function positionTooltip() {
+        const min = parseFloat(input.min);
+        const max = parseFloat(input.max);
+        const val = parseFloat(input.value);
+        const pct = ((val - min) / (max - min)) * 100;
+        tooltipSpan.style.left = pct + '%';
+        tooltipSpan.textContent = (input.step && parseFloat(input.step) < 1)
+          ? val.toFixed(1) : String(Math.round(val));
+      }
+
+      positionTooltip();
+
+      input.addEventListener('input', () => {
+        positionTooltip();
+        tooltipSpan.classList.add('show');
+      });
+
+      input.addEventListener('mousedown', () => {
+        positionTooltip();
+        tooltipSpan.classList.add('show');
+      });
+
+      input.addEventListener('mouseup', () => {
+        setTimeout(() => tooltipSpan.classList.remove('show'), 160);
+      });
+
+      input.addEventListener('touchstart', () => {
+        positionTooltip();
+        tooltipSpan.classList.add('show');
+      }, { passive: true });
+
+      input.addEventListener('touchend', () => {
+        setTimeout(() => tooltipSpan.classList.remove('show'), 160);
+      });
+
+      input.addEventListener('blur', () => {
+        tooltipSpan.classList.remove('show');
+      });
+    });
     }
   </script>
 </body>
