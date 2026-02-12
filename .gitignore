@@ -8,7 +8,7 @@
 .localdevserver/
 deploy-options.json
 force-app/
-test-data/
+test-data*/
 
 # LWC VSCode autocomplete
 **/lwc/jsconfig.json

@@ -240,8 +240,8 @@ export class SimpleHtmlVisualizer {
     .type-ApexClass { background: #00BCD4; color: white; }
     .type-ApexTrigger { background: #1565C0; color: white; }
     .type-Flow { background: #9C27B0; color: white; }
-    .type-LightningWebComponent { background: #CDDC39; color: white; }
-    .type-AuraComponent { background: #CDDC39; color: white; }
+    .type-LightningWebComponent { background: #FF9800; color: white; }
+    .type-AuraComponent { background: #E65100; color: white; }
     .type-Unknown { background: #757575; color: white; }
 
     .component-name {
@@ -339,9 +339,9 @@ export class SimpleHtmlVisualizer {
     }
     .dep-item.used-by.type-LightningWebComponent,
     .dep-item.used-by.type-AuraComponent {
-      background: #f1f8e9;
-      border-left-color: #CDDC39;
-      color: #33691e;
+      background: #fff3e0;
+      border-left-color: #FF9800;
+      color: #e65100;
     }
     .dep-item.used-by.type-Unknown {
       background: #f5f5f5;

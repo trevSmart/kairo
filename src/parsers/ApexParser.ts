@@ -13,7 +13,9 @@ export class ApexParser {
     type: 'ApexClass' | 'ApexTrigger',
     objectNameResolver?: (name: string) => string,
     isObjectName?: (name: string) => boolean,
-    isApexClass?: (name: string) => boolean
+    isApexClass?: (name: string) => boolean,
+    isFieldName?: (name: string) => boolean,
+    isKnownObject?: (name: string) => boolean
   ): ParsedApex {
     const content = readFileSync(filePath, 'utf-8');
 
@@ -54,8 +56,10 @@ export class ApexParser {
       objectOperations.get(objectName)!.add('soql');
     }
 
-    // Create dependencies with appropriate source metadata
+    // Create dependencies with appropriate source metadata (only for known objects)
     for (const [objectName, operations] of objectOperations.entries()) {
+      if (isFieldName?.(objectName)) continue;
+      if (isKnownObject && !isKnownObject(objectName)) continue;
       // If object has DML operations, prioritize that
       const source = operations.has('dml') ? 'dml' : 'soql';
 
@@ -85,6 +89,8 @@ export class ApexParser {
       if (nextWordMatch && soqlKeywords.has(nextWordMatch[1].toLowerCase())) {
         continue; // Skip SOQL SELECT list fields like "Field__c from"
       }
+      if (isFieldName?.(objectName)) continue;
+      if (isKnownObject && !isKnownObject(objectName)) continue;
       // Skip if already tracked via SOQL/DML
       if (!objectOperations.has(objectName) && !foundTypeReferences.has(objectName)) {
         foundTypeReferences.add(objectName);
@@ -108,6 +114,7 @@ export class ApexParser {
 
     while ((match = classPattern.exec(content)) !== null) {
       const className = match[1];
+      if (isFieldName?.(className)) continue;
       // Skip standard classes and avoid duplicates
       if (!standardClasses.includes(className) && !foundClasses.has(className)) {
         foundClasses.add(className);
@@ -139,19 +146,21 @@ export class ApexParser {
       }
     }
 
-    // For triggers, extract the object they're on
+    // For triggers, extract the object they're on (only if known)
     if (type === 'ApexTrigger') {
       const triggerPattern = /trigger\s+\w+\s+on\s+([A-Z][a-zA-Z0-9_]*)/;
       const triggerMatch = content.match(triggerPattern);
       if (triggerMatch) {
         const triggerObject = objectNameResolver ? objectNameResolver(triggerMatch[1]) : triggerMatch[1];
-        const dep: Dependency = {
-          from: component.id,
-          to: `CustomObject:${triggerObject}`,
-          type: 'triggers_on',
-        };
-        dep.weight = DependencyWeightCalculator.calculate(dep);
-        dependencies.push(dep);
+        if (!isKnownObject || isKnownObject(triggerObject)) {
+          const dep: Dependency = {
+            from: component.id,
+            to: `CustomObject:${triggerObject}`,
+            type: 'triggers_on',
+          };
+          dep.weight = DependencyWeightCalculator.calculate(dep);
+          dependencies.push(dep);
+        }
       }
     }
 

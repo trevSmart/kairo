@@ -43,8 +43,8 @@ const COLOR_MAP: Record<string, string> = {
   ApexClass: '#00BCD4',
   ApexTrigger: '#1565C0',
   Flow: '#9C27B0',
-  LightningWebComponent: '#66BB6A',
-  AuraComponent: '#2E7D32',
+  LightningWebComponent: '#FF9800',
+  AuraComponent: '#E65100',
 };
 
 const FIDELITY_PULL = 0.5;
@@ -765,11 +765,11 @@ export class HtmlVisualizer {
         <span>Triggers</span>
       </div>
       <div class="legend-item">
-        <div class="legend-color" style="background: #66BB6A;"></div>
+        <div class="legend-color" style="background: #FF9800;"></div>
         <span>LWC</span>
       </div>
       <div class="legend-item">
-        <div class="legend-color" style="background: #2E7D32;"></div>
+        <div class="legend-color" style="background: #E65100;"></div>
         <span>Aura</span>
       </div>
     </div>
@@ -1082,20 +1082,20 @@ export class HtmlVisualizer {
       if (!heatmapGrid.length) return;
       heatmapCtx.save();
       heatmapCtx.globalCompositeOperation = 'source-over';
-      heatmapCtx.globalAlpha = 0.85;
+      heatmapCtx.globalAlpha = 0.45;
       heatmapCtx.clearRect(0, 0, heatmapWidth, heatmapHeight);
       for (let y = 0; y < heatmapGridRows; y++) {
         for (let x = 0; x < heatmapGridCols; x++) {
           const value = heatmapGrid[y * heatmapGridCols + x];
           if (value <= 0) continue;
-          const alpha = Math.min(0.9, value / heatmapMax);
+          const alpha = Math.min(0.45, value / heatmapMax);
           heatmapCtx.fillStyle = 'rgba(255, 64, 129, ' + alpha.toFixed(3) + ')';
           heatmapCtx.fillRect(x * heatmapCellW, y * heatmapCellH, heatmapCellW + 0.5, heatmapCellH + 0.5);
         }
       }
       // Grid overlay
-      heatmapCtx.globalAlpha = 0.25;
-      heatmapCtx.strokeStyle = 'rgba(255, 64, 129, 0.35)';
+      heatmapCtx.globalAlpha = 0.15;
+      heatmapCtx.strokeStyle = 'rgba(255, 64, 129, 0.2)';
       heatmapCtx.lineWidth = 1;
       for (let x = 0; x <= heatmapGridCols; x++) {
         const px = Math.round(x * heatmapCellW) + 0.5;
