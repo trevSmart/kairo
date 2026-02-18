@@ -39,7 +39,7 @@
 		"vitest": "^4.0.18"
 	},
 	"dependencies": {
-		"fast-xml-parser": "^5.3.4",
+		"fast-xml-parser": "^5.3.6",
 		"graphology": "^0.25.4",
 		"graphology-communities-louvain": "^2.0.2",
 		"graphology-types": "^0.24.7"
